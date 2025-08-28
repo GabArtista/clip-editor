@@ -1,0 +1,17 @@
+[Unit]
+Description=FALA Editor API (FastAPI + Uvicorn)
+After=network.target
+
+[Service]
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/fala-editor
+EnvironmentFile=/opt/fala-editor/.env
+ExecStart=/opt/fala-editor/venv/bin/uvicorn api.app:app --proxy-headers --host ${APP_HOST} --port ${APP_PORT} --workers ${APP_WORKERS}
+Restart=always
+RestartSec=3
+KillSignal=SIGQUIT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

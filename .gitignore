@@ -1,0 +1,21 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Dados de execução (não versionar)
+videos/
+processed/
+!processed/.gitkeep
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
