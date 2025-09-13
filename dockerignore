@@ -1,0 +1,17 @@
+# Evitar mandar lixo para o build
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+build/
+dist/
+.DS_Store
+
+# Arquivos específicos a serem ignorados
+estrutura.txt
+test_edit.py

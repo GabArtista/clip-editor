@@ -9,7 +9,12 @@ if __name__ == "__main__":
     impact_video = float(input("Informe o segundo de impacto no VÍDEO (ex.: 10.10): ").strip())
 
     print("📥 Baixando vídeo...")
-    video_path = baixar_reel(url)
+    # Aqui, você precisaria ter o arquivo de cookies para testar o download com autenticação
+    # Para testes, a lógica abaixo assume que o vídeo é público ou que o cookie já está salvo
+    video_path = baixar_reel(url, cookie_file_path="cookies/session.netscape")
+    
+    if not os.path.exists(video_path):
+        raise FileNotFoundError("Falha ao baixar o vídeo. Verifique o link e os cookies.")
 
     musica_path = os.path.join("music", f"{music}.mp3")
     if not os.path.exists(musica_path):
