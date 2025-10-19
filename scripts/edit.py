@@ -7,6 +7,7 @@ import json
 import shlex
 import subprocess
 from pathlib import Path
+from typing import Optional, Dict
 
 
 # =========================
@@ -63,7 +64,8 @@ def adicionar_musica(
     output_path: str,
     music_impact: float = 51.0,       # mantido p/ compat original (impacto na música)
     debug: bool = True,
-    gain_db: float = 6.0
+    gain_db: float = 6.0,
+    video_trim: Optional[Dict[str, float]] = None,
 ) -> str:
     """
     Substitui o áudio do vídeo por um trecho contínuo da música, SEM adicionar silêncio.
@@ -93,6 +95,31 @@ def adicionar_musica(
         raise FileNotFoundError(f"Vídeo não encontrado: {video_path}")
     if not os.path.exists(musica_path):
         raise FileNotFoundError(f"Música não encontrada: {musica_path}")
+
+    temp_trimmed_video = None
+
+    if video_trim:
+        trim_start = max(0.0, float(video_trim.get("start", 0.0)))
+        trim_duration = max(0.1, float(video_trim.get("duration", 0.0)))
+        temp_trimmed_video = os.path.join("processed", f"video_trim_{uuid.uuid4().hex}.mp4")
+        cmd_trim = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{trim_start:.3f}",
+            "-i",
+            video_path,
+            "-t",
+            f"{trim_duration:.3f}",
+            "-c",
+            "copy",
+            temp_trimmed_video,
+        ]
+        print("✂️  Gerando recorte do vídeo…")
+        _run(cmd_trim)
+        if not os.path.exists(temp_trimmed_video):
+            raise RuntimeError("Falha ao gerar recorte do vídeo temporário.")
+        video_path = temp_trimmed_video
 
     # Durações
     duracao_video = _ffprobe_duration(video_path)
@@ -160,6 +187,8 @@ def adicionar_musica(
 
     # Limpeza
     try:
+        if temp_trimmed_video and os.path.exists(temp_trimmed_video) and not debug:
+            os.remove(temp_trimmed_video)
         if not debug and os.path.exists(temp_audio):
             os.remove(temp_audio)
     except Exception as e:

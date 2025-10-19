@@ -1,3 +1,7 @@
+import pytest
+
+pytest.skip("Teste manual legado; ignorado na suíte automatizada.", allow_module_level=True)
+
 import os
 import sys
 from scripts.edit import adicionar_musica

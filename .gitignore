@@ -13,6 +13,8 @@ venv/
 videos/
 processed/
 !processed/.gitkeep
+runtime/
+music_storage/
 
 # IDE/OS
 .vscode/

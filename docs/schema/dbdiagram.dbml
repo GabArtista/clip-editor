@@ -1,0 +1,267 @@
+Enum user_status {
+  active
+  invited
+  suspended
+  deleted
+}
+
+Enum social_provider {
+  instagram
+}
+
+Enum social_status {
+  active
+  expired
+  revoked
+}
+
+Enum asset_status {
+  pending
+  processing
+  ready
+  failed
+  archived
+}
+
+Enum edit_status {
+  draft
+  queued
+  processing
+  delivered
+  approved
+  reedit_requested
+  rejected
+}
+
+Enum decision_type {
+  approved
+  approved_with_idea
+  rejected
+}
+
+Table users {
+  id uuid [pk]
+  email varchar [unique, not null]
+  password_hash varchar
+  status user_status [default: 'active']
+  last_login_at timestamptz
+  created_at timestamptz
+  updated_at timestamptz
+  Indexes {
+    (status)
+  }
+}
+
+Table user_profiles {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  display_name varchar
+  avatar_url varchar
+  company_name varchar
+  locale varchar [default: 'pt-BR']
+  timezone varchar [default: 'America/Sao_Paulo']
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table social_accounts {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  provider social_provider [not null]
+  provider_user_id varchar
+  username varchar
+  cookies_encrypted text [note: 'JSON criptografado com metadados']
+  cookies_updated_at timestamptz
+  status social_status [default: 'active']
+  reauth_required bool [default: false]
+  error_notes text
+  created_at timestamptz
+  updated_at timestamptz
+  Indexes {
+    (user_id, provider) [unique]
+    (status)
+  }
+}
+
+Table audio_files {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  storage_path varchar [not null]
+  original_filename varchar
+  mime_type varchar
+  duration_seconds decimal(10,2)
+  size_bytes bigint
+  checksum varchar
+  created_at timestamptz
+  Indexes {
+    (user_id)
+    (checksum)
+  }
+}
+
+Table music_assets {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  audio_file_id uuid [not null, ref: > audio_files.id]
+  title varchar [not null]
+  description text
+  genre varchar
+  bpm smallint
+  musical_key varchar
+  status asset_status [default: 'pending']
+  uploaded_at timestamptz
+  processed_at timestamptz
+  Indexes {
+    (user_id, status)
+    (title)
+  }
+}
+
+Table music_transcriptions {
+  id uuid [pk]
+  music_asset_id uuid [not null, ref: > music_assets.id]
+  transcript_text text
+  transcript_json jsonb
+  language varchar [default: 'pt']
+  model_version varchar
+  confidence decimal(5,2)
+  started_at timestamptz
+  completed_at timestamptz
+  Indexes {
+    (music_asset_id)
+  }
+}
+
+Table reels_ingests {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  social_account_id uuid [ref: > social_accounts.id]
+  provider social_provider [not null, default: 'instagram']
+  reel_id varchar
+  reel_url varchar [not null]
+  caption text
+  metadata jsonb
+  storage_path varchar
+  storage_expires_at timestamptz
+  status asset_status [default: 'pending']
+  downloaded_at timestamptz
+  created_at timestamptz
+  Indexes {
+    (user_id, provider)
+    (reel_id) [unique]
+    (storage_expires_at)
+  }
+}
+
+Table video_scene_analysis {
+  id uuid [pk]
+  reels_ingest_id uuid [not null, ref: > reels_ingests.id]
+  start_time_seconds decimal(10,2)
+  end_time_seconds decimal(10,2)
+  keyframes jsonb [note: 'Paths ou IDs de frames representativos']
+  visual_concepts jsonb
+  sentiment varchar
+  confidence decimal(5,2)
+  created_at timestamptz
+  Indexes {
+    (reels_ingest_id)
+  }
+}
+
+Table video_edits {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  reels_ingest_id uuid [not null, ref: > reels_ingests.id]
+  music_asset_id uuid [not null, ref: > music_assets.id]
+  status edit_status [default: 'draft']
+  workflow_version varchar
+  ai_plan jsonb [note: 'Brief IA para combinação vídeo + música']
+  render_context jsonb
+  started_at timestamptz
+  completed_at timestamptz
+  created_at timestamptz
+  updated_at timestamptz
+  Indexes {
+    (user_id, status)
+    (reels_ingest_id, music_asset_id)
+  }
+}
+
+Table video_edit_segments {
+  id uuid [pk]
+  video_edit_id uuid [not null, ref: > video_edits.id]
+  segment_order int [not null]
+  video_start_seconds decimal(10,2)
+  video_end_seconds decimal(10,2)
+  music_start_seconds decimal(10,2)
+  music_end_seconds decimal(10,2)
+  ai_rationale text
+  confidence decimal(5,2)
+  created_at timestamptz
+  Indexes {
+    (video_edit_id, segment_order) [unique]
+  }
+}
+
+Table video_edit_deliveries {
+  id uuid [pk]
+  video_edit_id uuid [not null, ref: > video_edits.id]
+  delivery_url varchar [not null]
+  url_expires_at timestamptz [not null]
+  delivered_at timestamptz
+  download_count int
+  last_download_at timestamptz
+  revoked_at timestamptz
+  created_at timestamptz
+  Indexes {
+    (video_edit_id)
+    (url_expires_at)
+  }
+}
+
+Table user_feedback {
+  id uuid [pk]
+  video_edit_id uuid [not null, ref: > video_edits.id]
+  user_id uuid [not null, ref: > users.id]
+  decision decision_type [not null]
+  feedback_text text
+  created_at timestamptz
+  Indexes {
+    (video_edit_id)
+    (user_id, decision)
+  }
+}
+
+Table reedit_requests {
+  id uuid [pk]
+  original_edit_id uuid [not null, ref: > video_edits.id]
+  new_edit_id uuid [ref: > video_edits.id]
+  user_id uuid [not null, ref: > users.id]
+  prompt_text text [not null]
+  context_snapshot jsonb
+  processed_at timestamptz
+  created_at timestamptz
+}
+
+Table ai_learning_events {
+  id uuid [pk]
+  user_id uuid [not null, ref: > users.id]
+  source varchar [not null, note: 'feedback|edit|manual']
+  payload jsonb [not null]
+  weight decimal(5,2)
+  created_at timestamptz
+}
+
+Table audit_logs {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  entity_name varchar [not null]
+  entity_id uuid [not null]
+  action varchar [not null]
+  metadata jsonb
+  created_at timestamptz
+  Indexes {
+    (entity_name, entity_id)
+    (user_id)
+  }
+}

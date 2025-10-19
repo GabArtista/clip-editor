@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "FALA Editor",
+    "slug": "fala-editor",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "falaeditor",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F4F0E4"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fala.editor",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Permitir acesso à biblioteca para selecionar músicas e capas.",
+        "NSCameraUsageDescription": "Permitir acesso à câmera para captar fotos de capa.",
+        "NSMicrophoneUsageDescription": "Permitir gravação de áudio para notas rápidas."
+      }
+    },
+    "android": {
+      "package": "com.fala.editor",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#D9A441"
+      },
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_AUDIO",
+        "INTERNET",
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-av",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}
