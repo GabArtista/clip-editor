@@ -15,15 +15,15 @@ else:
 
 
 def test_metrics_endpoint_tracks_feedback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_id, database = _prepare_environment(tmp_path, monkeypatch)
+    client, user_id, music_id, database, headers = _prepare_environment(tmp_path, monkeypatch)
 
     client.post(
         f"/feedback/music/{music_id}",
         json={
-            "user_id": user_id,
             "message": "Feedback de teste para tokens",
             "mood": "positive",
         },
+        headers=headers,
     )
 
     metrics_resp = client.get("/metrics")
@@ -33,18 +33,23 @@ def test_metrics_endpoint_tracks_feedback(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def test_metrics_records_job_duration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_ids = _prepare_video_client(tmp_path, monkeypatch)
+    client, user_id, music_ids, headers = _prepare_video_client(tmp_path, monkeypatch)
 
     response = client.post(
         "/videos",
-        json={"user_id": user_id, "url": "https://example.com/video", "music_id": music_ids[0]},
+        json={"url": "https://example.com/video", "music_id": music_ids[0]},
+        headers=headers,
     )
     assert response.status_code == 201
     payload = response.json()
     clip_ids = [opt["id"] for opt in payload["options"][:2]]
     video_id = payload.get("video_id") or payload.get("id")
 
-    render_resp = client.post(f"/render/{video_id}", json={"clip_ids": clip_ids})
+    render_resp = client.post(
+        f"/render/{video_id}",
+        json={"clip_ids": clip_ids},
+        headers=headers,
+    )
     assert render_resp.status_code == 200
 
     metrics_text = client.get("/metrics").text

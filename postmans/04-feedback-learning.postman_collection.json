@@ -1,0 +1,184 @@
+{
+  "info": {
+    "name": "FALA - 04 Feedback & Learning",
+    "_postman_id": "00000000-0000-4000-8000-000000000005",
+    "description": "Endpoints de feedback e gestão de centros de aprendizado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Feedback para Música",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Curti a intro, mas falta energia.\",\n  \"mood\": \"positive\",\n  \"tags\": [\"verso\", \"transição\"],\n  \"source\": \"manual-review\",\n  \"weight\": 0.7\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/feedback/music/{{music_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "feedback",
+            "music",
+            "{{music_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Feedback Geral do Artista",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"music_id\": \"{{music_id}}\",\n  \"message\": \"Quero clipes ainda mais dinâmicos.\",\n  \"mood\": \"neutral\",\n  \"tags\": [\"energia\"],\n  \"source\": \"survey\",\n  \"weight\": 0.5\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/feedback/artist",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "feedback",
+            "artist"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Criar Learning Center",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Baseline Trap\",\n  \"scope\": \"artist\",\n  \"music_asset_id\": \"{{music_id}}\",\n  \"genre\": \"trap\",\n  \"description\": \"Preferências padrão do artista.\",\n  \"is_experimental\": true,\n  \"parameters\": {\"energy\": 0.8, \"tempo\": \"fast\"}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/learning-centers",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "learning-centers"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Atualizar Learning Center",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Baseline Trap v2\",\n  \"description\": \"Ajuste fino após feedbacks\",\n  \"status\": \"active\",\n  \"is_experimental\": false,\n  \"parameters\": {\"energy\": 0.9},\n  \"notes\": \"Melhorar drop\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/learning-centers/{{center_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "learning-centers",
+            "{{center_id}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Arquivar Learning Center",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/learning-centers/{{center_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "learning-centers",
+            "{{center_id}}"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8060",
+      "type": "string"
+    },
+    {
+      "key": "music_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "center_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

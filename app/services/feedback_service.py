@@ -38,7 +38,7 @@ class FeedbackService:
     ) -> MusicFeedback:
         asset = (
             session.query(MusicAsset)
-            .filter(MusicAsset.id == music_asset_id)
+            .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
             .first()
         )
         if not asset:
@@ -103,7 +103,7 @@ class FeedbackService:
         if music_asset_id:
             asset = (
                 session.query(MusicAsset)
-                .filter(MusicAsset.id == music_asset_id)
+                .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
                 .first()
             )
             if not asset:
@@ -319,7 +319,7 @@ class LearningCenterService:
                 raise ValueError("music_scope_requires_music")
             asset_exists = (
                 session.query(MusicAsset.id)
-                .filter(MusicAsset.id == music_asset_id)
+                .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
                 .first()
             )
             if not asset_exists:

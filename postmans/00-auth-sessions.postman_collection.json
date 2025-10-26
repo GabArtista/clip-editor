@@ -1,0 +1,153 @@
+{
+  "info": {
+    "name": "FALA - 00 Auth & Sessions",
+    "_postman_id": "00000000-0000-4000-8000-000000000000",
+    "description": "Fluxo de registro/login e atualização de sessão de cookies para jobs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Registrar Usuário",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/register",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "description": "Cria um usuário e retorna access_token. Copie o token para a variável {{access_token}} para usar nas requisições seguintes."
+      },
+      "response": []
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "username",
+              "value": "{{email}}",
+              "type": "text"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "description": "Executa login do usuário e devolve access_token. Atualize {{access_token}} com o valor retornado."
+      },
+      "response": []
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Atualizar Sessão (cookies)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cookie_string\": {{cookie_json}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/update-session",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "update-session"
+          ]
+        },
+        "description": "Envie a lista de cookies exportada do navegador em formato JSON (ex.: Chrome Storage Export)."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8060",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "artist@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "Secret123!",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cookie_json",
+      "value": "\"[]\"",
+      "type": "string"
+    }
+  ]
+}

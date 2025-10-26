@@ -49,38 +49,11 @@ def _prepare_video_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import_module("app.database")
 
     from app import database
-    from app.models import Base, User
+    from app.models import Base
     from app.services.music_service import MusicMetadata, MusicService
     from starlette.datastructures import UploadFile
 
     Base.metadata.create_all(database.engine)
-
-    music_service = MusicService(storage_dir=music_store)
-    with database.SessionLocal() as session:
-        user = User(email="artist@example.com")
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        user_id = user.id
-
-        music_ids: List[str] = []
-        for idx in range(2):
-            audio_bytes = io.BytesIO(b"fake-audio-%d" % idx)
-            upload = UploadFile(
-                filename=f"track{idx}.mp3",
-                file=audio_bytes,
-            )
-            asset = music_service.create_music_asset(
-                session,
-                upload,
-                MusicMetadata(
-                    user_id=user_id,
-                    title=f"Track {idx}",
-                    declared_genre="trap" if idx == 0 else "boom bap",
-                    description="demo",
-                ),
-            )
-            music_ids.append(asset.id)
 
     video_file = tmp_path / "video.mp4"
     video_file.write_bytes(b"fake-video-content")
@@ -112,7 +85,39 @@ def _prepare_video_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     app_module.video_pipeline = pipeline_module.VideoPipeline(downloader=fake_downloader)
     client = TestClient(app_module.app)
-    return client, user_id, music_ids
+
+    register_resp = client.post(
+        "/auth/register",
+        json={"email": "artist@example.com", "password": "secret123"},
+    )
+    assert register_resp.status_code == 201, register_resp.text
+    payload = register_resp.json()
+    token = payload["access_token"]
+    user_id = payload["user"]["id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    music_service = MusicService(storage_dir=music_store)
+    music_ids: List[str] = []
+    with database.SessionLocal() as session:
+        for idx in range(2):
+            audio_bytes = io.BytesIO(b"fake-audio-%d" % idx)
+            upload = UploadFile(
+                filename=f"track{idx}.mp3",
+                file=audio_bytes,
+            )
+            asset = music_service.create_music_asset(
+                session,
+                upload,
+                MusicMetadata(
+                    user_id=user_id,
+                    title=f"Track {idx}",
+                    declared_genre="trap" if idx == 0 else "boom bap",
+                    description="demo",
+                ),
+            )
+            music_ids.append(asset.id)
+
+    return client, user_id, music_ids, headers
 
 
 def _min_difference(offsets: List[float]) -> float:
@@ -123,11 +128,12 @@ def _min_difference(offsets: List[float]) -> float:
 
 
 def test_video_submission_with_specific_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_ids = _prepare_video_client(tmp_path, monkeypatch)
+    client, user_id, music_ids, headers = _prepare_video_client(tmp_path, monkeypatch)
 
     response = client.post(
         "/videos",
-        json={"user_id": user_id, "url": "https://example.com/video", "music_id": music_ids[0]},
+        json={"url": "https://example.com/video", "music_id": music_ids[0]},
+        headers=headers,
     )
     assert response.status_code == 201, response.text
     payload = response.json()
@@ -158,7 +164,8 @@ def test_video_submission_without_specific_music(tmp_path: Path, monkeypatch: py
 
     response = client.post(
         "/videos",
-        json={"user_id": user_id, "url": "https://example.com/video"},
+        json={"url": "https://example.com/video"},
+        headers=headers,
     )
     assert response.status_code == 201
     payload = response.json()
@@ -175,11 +182,12 @@ def test_video_submission_without_specific_music(tmp_path: Path, monkeypatch: py
 
 
 def test_render_variants_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_ids = _prepare_video_client(tmp_path, monkeypatch)
+    client, user_id, music_ids, headers = _prepare_video_client(tmp_path, monkeypatch)
 
     response = client.post(
         "/videos",
-        json={"user_id": user_id, "url": "https://example.com/video", "music_id": music_ids[0]},
+        json={"url": "https://example.com/video", "music_id": music_ids[0]},
+        headers=headers,
     )
     assert response.status_code == 201
     payload = response.json()
@@ -195,6 +203,7 @@ def test_render_variants_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             "mode": "clip_render",
             "video_ingest_id": video_id,
             "clip_ids": clip_ids,
+            "user_id": user_id,
         }
     )
     job_data = job_manager.get_job(job_id)

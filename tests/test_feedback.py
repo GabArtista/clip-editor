@@ -47,21 +47,28 @@ def _prepare_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import_module("app.database")
 
     from app import database
-    from app.models import Base, User
+    from app.models import Base
     from app.services.music_service import MusicMetadata, MusicService
     from starlette.datastructures import UploadFile
 
     Base.metadata.create_all(database.engine)
 
+    ensure_multipart_stub()
+    app_module = import_module("api.app")
+    client = TestClient(app_module.app)
+
+    register_resp = client.post(
+        "/auth/register",
+        json={"email": "artist@example.com", "password": "secret123"},
+    )
+    assert register_resp.status_code == 201, register_resp.text
+    payload = register_resp.json()
+    token = payload["access_token"]
+    user_id = payload["user"]["id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
     music_service = MusicService(storage_dir=music_store)
-
     with database.SessionLocal() as session:
-        user = User(email="artist@example.com")
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        user_id = user.id
-
         upload = UploadFile(filename="track.mp3", file=io.BytesIO(b"fake-audio"))
         asset = music_service.create_music_asset(
             session,
@@ -75,26 +82,22 @@ def _prepare_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         )
         music_id = asset.id
 
-    ensure_multipart_stub()
-    app_module = import_module("api.app")
-    client = TestClient(app_module.app)
-
-    return client, user_id, music_id, database
+    return client, user_id, music_id, database, headers
 
 
 def test_music_feedback_creates_learning_event(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_id, database = _prepare_environment(tmp_path, monkeypatch)
+    client, user_id, music_id, database, headers = _prepare_environment(tmp_path, monkeypatch)
 
     response = client.post(
         f"/feedback/music/{music_id}",
         json={
-            "user_id": user_id,
             "message": "Gostei da batida.",
             "mood": "positive",
             "tags": ["batida", "energia"],
             "source": "test",
             "weight": 1.5,
         },
+        headers=headers,
     )
     assert response.status_code == 201, response.text
     payload = response.json()
@@ -113,18 +116,18 @@ def test_music_feedback_creates_learning_event(tmp_path: Path, monkeypatch: pyte
 
 
 def test_artist_feedback_without_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_id, database = _prepare_environment(tmp_path, monkeypatch)
+    client, user_id, music_id, database, headers = _prepare_environment(tmp_path, monkeypatch)
 
     response = client.post(
         "/feedback/artist",
         json={
-            "user_id": user_id,
             "message": "Quero focar na letra.",
             "mood": "neutral",
             "tags": ["letra"],
             "source": "test",
             "weight": 0.8,
         },
+        headers=headers,
     )
     assert response.status_code == 201, response.text
 
@@ -137,18 +140,18 @@ def test_artist_feedback_without_music(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_learning_center_crud(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_id, database = _prepare_environment(tmp_path, monkeypatch)
+    client, user_id, music_id, database, headers = _prepare_environment(tmp_path, monkeypatch)
 
     create_resp = client.post(
         "/learning-centers",
         json={
             "name": "Centro do Trap",
             "scope": "artist",
-            "user_id": user_id,
             "description": "Preferências gerais",
             "is_experimental": True,
             "parameters": {"energy": 0.8},
         },
+        headers=headers,
     )
     assert create_resp.status_code == 201, create_resp.text
     center = create_resp.json()
@@ -161,11 +164,12 @@ def test_learning_center_crud(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             "notes": "pausa para ajuste",
             "parameters": {"energy": 0.6},
         },
+        headers=headers,
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["status"] == "paused"
 
-    delete_resp = client.delete(f"/learning-centers/{center_id}")
+    delete_resp = client.delete(f"/learning-centers/{center_id}", headers=headers)
     assert delete_resp.status_code == 200
     assert delete_resp.json()["status"] == "archived"
 

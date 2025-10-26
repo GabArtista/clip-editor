@@ -24,6 +24,14 @@ class MusicTranscriptionSchema(BaseModel):
     confidence: Optional[float] = None
 
 
+class MusicListItem(BaseModel):
+    id: str
+    title: str
+    status: str
+    genre: Optional[str] = None
+    uploaded_at: datetime
+
+
 class MusicUploadResponse(BaseModel):
     music_id: str = Field(..., alias="id")
     title: str

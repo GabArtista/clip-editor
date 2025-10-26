@@ -37,9 +37,13 @@ Ferramentas para automatizar a edição de vídeos de música.
 - `POST /learning-centers` / `PUT /learning-centers/{id}` / `DELETE /learning-centers/{id}` — gerenciam centros de aprendizado versionados (global, artista ou música).
 - `GET /metrics` — exporta métricas em formato Prometheus (requisições, jobs, tokens estimados, etc.).
 
+> Exceto por `/health` e `/metrics`, todos os endpoints exigem Bearer token obtido em `/auth/register` ou `/auth/login`.
+
 Documentação adicional:
 
 - `docs/platform-overview.md`: visão geral da arquitetura.
 - `docs/schema/dbdiagram.dbml`: modelo do banco para o dbdiagram.
 - `docs/migrations.md`: guia de uso do Alembic.
-- `mobile/README.md`: roadmap do app React Native.
+- `docs/local-manual-testing.md`: passo a passo para rodar localmente e validar os fluxos manualmente.
+- `docs/testing-tutorial.md`: guia rápido dos testes automatizados disponíveis.
+- `docs/flow-tutorial.md`: visão orientada a fluxos dos principais endpoints e integrações.

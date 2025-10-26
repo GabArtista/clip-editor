@@ -1,0 +1,101 @@
+{
+  "info": {
+    "name": "FALA - 01 Music Library",
+    "_postman_id": "00000000-0000-4000-8000-000000000002",
+    "description": "Fluxo de upload e consulta de músicas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Upload de Música",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "title",
+              "value": "Minha faixa demo",
+              "type": "text"
+            },
+            {
+              "key": "description",
+              "value": "Descrição opcional",
+              "type": "text"
+            },
+            {
+              "key": "genre",
+              "value": "trap",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/music",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "music"
+          ]
+        },
+        "description": "Envie um arquivo de áudio real para testar o pipeline de ingestão."
+      },
+      "response": []
+    },
+    {
+      "name": "Buscar Música por ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/music/{{music_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "music",
+            "{{music_id}}"
+          ]
+        },
+        "description": "Use o ID retornado no upload ou algum já existente no banco."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8060",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "music_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

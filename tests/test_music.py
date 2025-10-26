@@ -17,7 +17,7 @@ else:
 
 def _prepare_client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Tuple[TestClient, str, Path, "MusicService", Any]:
+) -> Tuple[TestClient, str, Path, "MusicService", Any, dict]:
     runtime_dir = tmp_path / "runtime"
     storage_dir = tmp_path / "storage"
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -39,28 +39,33 @@ def _prepare_client(
     import_module("app.database")
 
     from app import database
-    from app.models import Base, User
+    from app.models import Base
     from app.services.music_service import MusicService
 
     Base.metadata.create_all(database.engine)
-
-    with database.SessionLocal() as session:
-        user = User(email="artist@example.com")
-        session.add(user)
-        session.commit()
-        user_id = user.id
-
-    music_service = MusicService(storage_dir=storage_dir)
 
     ensure_multipart_stub()
     app_module = import_module("api.app")
 
     client = TestClient(app_module.app)
-    return client, user_id, storage_dir, music_service, database
+
+    register_resp = client.post(
+        "/auth/register",
+        json={"email": "artist@example.com", "password": "secret123"},
+    )
+    assert register_resp.status_code == 201, register_resp.text
+    payload = register_resp.json()
+    token = payload["access_token"]
+    user_id = payload["user"]["id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    music_service = MusicService(storage_dir=storage_dir)
+
+    return client, user_id, storage_dir, music_service, database, headers
 
 
 def test_upload_and_fetch_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, storage_dir, music_service, database = _prepare_client(tmp_path, monkeypatch)
+    client, user_id, storage_dir, music_service, database, headers = _prepare_client(tmp_path, monkeypatch)
 
     from app.services.music_service import MusicMetadata
     from starlette.datastructures import UploadFile
@@ -83,7 +88,7 @@ def test_upload_and_fetch_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         )
         music_id = asset.id
 
-    detail_resp = client.get(f"/music/{music_id}")
+    detail_resp = client.get(f"/music/{music_id}", headers=headers)
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["title"] == "Meu Som"
@@ -91,3 +96,47 @@ def test_upload_and_fetch_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert len(detail["beats"]) > 0
     assert (storage_dir).exists()
     assert any(storage_dir.iterdir())
+
+
+def test_list_music_assets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    client, user_id, storage_dir, music_service, database, headers = _prepare_client(tmp_path, monkeypatch)
+
+    from app.services.music_service import MusicMetadata
+    from starlette.datastructures import UploadFile
+
+    with database.SessionLocal() as session:
+        upload_1 = UploadFile(filename="first.mp3", file=io.BytesIO(b"first-audio"))
+        asset_one = music_service.create_music_asset(
+            session,
+            upload_1,
+            MusicMetadata(
+                user_id=user_id,
+                title="Faixa Um",
+                declared_genre="trap",
+                description="Primeira faixa",
+            ),
+        )
+
+        upload_2 = UploadFile(filename="second.mp3", file=io.BytesIO(b"second-audio"))
+        asset_two = music_service.create_music_asset(
+            session,
+            upload_2,
+            MusicMetadata(
+                user_id=user_id,
+                title="Faixa Dois",
+                declared_genre="funk",
+                description="Segunda faixa",
+            ),
+        )
+
+    resp = client.get("/music", headers=headers)
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert len(payload) == 2
+    ids = [item["id"] for item in payload]
+    assert set(ids) == {asset_one.id, asset_two.id}
+    # Ordenado por uploaded_at desc, logo a segunda criação aparece primeiro.
+    assert payload[0]["id"] == asset_two.id
+    assert payload[0]["title"] == "Faixa Dois"
+    assert payload[0]["status"] == "ready"
+    assert payload[0]["genre"] == "funk"

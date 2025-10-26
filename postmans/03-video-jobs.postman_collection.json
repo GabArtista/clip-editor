@@ -1,0 +1,156 @@
+{
+  "info": {
+    "name": "FALA - 03 Video Jobs",
+    "_postman_id": "00000000-0000-4000-8000-000000000004",
+    "description": "Fluxo de processamento e renderização de vídeos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Processar Vídeo (pipeline legado)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://www.instagram.com/reel/<id>/\",\n  \"music\": \"{{music_name}}\",\n  \"impact_music\": 0.6,\n  \"impact_video\": 0.4,\n  \"return_format\": \"url\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/processar",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "processar"
+          ]
+        },
+        "description": "Fluxo de jobs assíncronos que usa a fila RQ. Retorna o job_id para acompanhamento."
+      },
+      "response": []
+    },
+    {
+      "name": "Consultar Status do Job",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/jobs/{{job_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "jobs",
+            "{{job_id}}"
+          ]
+        },
+        "description": "Use o job_id obtido na submissão de /processar ou /render."
+      },
+      "response": []
+    },
+    {
+      "name": "Renderizar Clipes Selecionados",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"clip_ids\": [\"{{clip_id}}\"],\n  \"return_format\": \"url\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/render/{{video_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "render",
+            "{{video_id}}"
+          ]
+        },
+        "description": "Informe os clip_ids retornados em /videos/{id}. O job assíncrono retornará uma URL de download ao concluir."
+      },
+      "response": []
+    },
+    {
+      "name": "Limpar Arquivos Temporários",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/cleanup",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "cleanup"
+          ]
+        },
+        "description": "Remove vídeos já processados das pastas locais `videos/` e `processed/`."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8060",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "video_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clip_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "music_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

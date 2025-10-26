@@ -146,7 +146,11 @@ class VideoPipeline:
         self, db: Session, user_id: str, preferred_music_id: Optional[str]
     ) -> List[tuple[Optional[MusicAsset], int]]:
         if preferred_music_id:
-            asset = db.query(MusicAsset).filter(MusicAsset.id == preferred_music_id).first()
+            asset = (
+                db.query(MusicAsset)
+                .filter(MusicAsset.id == preferred_music_id, MusicAsset.user_id == user_id)
+                .first()
+            )
             if not asset:
                 raise ValueError("Música selecionada não encontrada")
             return [(asset, 3)]

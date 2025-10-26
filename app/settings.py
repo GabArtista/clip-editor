@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -57,3 +58,24 @@ def processed_storage_dir() -> Path:
     base = Path(os.getenv("PROCESSED_DIR", "processed"))
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+@dataclass
+class AuthSettings:
+    secret_key: str
+    algorithm: str
+    access_token_expire_minutes: int
+
+
+@lru_cache(maxsize=1)
+def get_auth_settings() -> AuthSettings:
+    _load_env()
+    secret = os.getenv("JWT_SECRET_KEY")
+    if not secret:
+        # Em desenvolvimento, gera fallback determinístico por execução.
+        import secrets
+
+        secret = secrets.token_urlsafe(32)
+    algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+    expire_minutes = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
+    return AuthSettings(secret_key=secret, algorithm=algorithm, access_token_expire_minutes=expire_minutes)

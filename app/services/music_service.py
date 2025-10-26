@@ -168,7 +168,7 @@ class MusicService:
 
     def to_response_dict(self, asset: MusicAsset) -> dict:
         return {
-            "id": asset.id,
+            "id": str(asset.id),
             "title": asset.title,
             "status": asset.status.value if isinstance(asset.status, AssetStatus) else asset.status,
             "genre": asset.genre,

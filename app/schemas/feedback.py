@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 
 class MusicFeedbackRequest(BaseModel):
-    user_id: str
     message: str
     mood: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -16,7 +15,6 @@ class MusicFeedbackRequest(BaseModel):
 
 
 class ArtistFeedbackRequest(BaseModel):
-    user_id: str
     message: str
     mood: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -36,7 +34,6 @@ class FeedbackResponse(BaseModel):
 class LearningCenterCreateRequest(BaseModel):
     name: str
     scope: str
-    user_id: Optional[str] = None
     music_asset_id: Optional[str] = None
     genre: Optional[str] = None
     description: Optional[str] = None

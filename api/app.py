@@ -1,16 +1,18 @@
 import http.cookiejar
 import json
 import os
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import parse_qs
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_session
-from app.models import LearningCenter, MusicAsset, MusicFeedback, VideoClipModel, VideoIngest
+from app.models import LearningCenter, MusicAsset, MusicFeedback, VideoClipModel, VideoIngest, User
 from app.schemas.feedback import (
     ArtistFeedbackRequest,
     FeedbackResponse,
@@ -19,7 +21,8 @@ from app.schemas.feedback import (
     LearningCenterUpdateRequest,
     MusicFeedbackRequest,
 )
-from app.schemas.music import MusicDetailResponse, MusicUploadResponse
+from app.schemas.music import MusicDetailResponse, MusicListItem, MusicUploadResponse
+from app.schemas.auth import AuthMeResponse, AuthRegisterRequest, TokenResponse, UserSummary
 from app.schemas.video import VideoDetailResponse, VideoSubmissionResponse
 from app.services import FeedbackService, LearningCenterService
 from app.services.music_service import MusicMetadata, MusicService
@@ -30,6 +33,13 @@ from jobs.cleanup import CleanupScheduler
 from jobs.config import get_env_float, get_env_int
 from jobs.manager import JobManager
 from jobs.rate_limit import RateLimiter
+from app.security import (
+    PasswordValidationError,
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+    hash_password,
+)
 
 tags_metadata = [
     {"name": "Health", "description": "Verificação rápida do serviço."},
@@ -45,11 +55,11 @@ tags_metadata = [
 
 app = FastAPI(title="FALA Editor API", openapi_tags=tags_metadata)
 
-SESSION_FILE_PATH = "cookies/session.netscape"
+SESSION_DIR = Path("cookies")
 
 os.makedirs("processed", exist_ok=True)
 os.makedirs("videos", exist_ok=True)
-os.makedirs("cookies", exist_ok=True)
+SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/videos", StaticFiles(directory="processed"), name="videos")
 
@@ -74,6 +84,11 @@ video_pipeline = VideoPipeline()
 feedback_service = FeedbackService()
 learning_center_service = LearningCenterService()
 
+
+def session_file_for_user(user_id: str) -> Path:
+    SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    return SESSION_DIR / f"{user_id}.netscape"
+
 class UpdateSessionRequest(BaseModel):
     cookie_string: str
 
@@ -87,7 +102,6 @@ class EditRequest(BaseModel):
 
 
 class VideoSubmissionRequest(BaseModel):
-    user_id: str
     url: str
     music_id: str | None = None
 
@@ -97,16 +111,115 @@ class VideoRenderRequest(BaseModel):
     return_format: str = "url"
 
 
+def _to_user_summary(user: User) -> UserSummary:
+    return UserSummary(id=str(user.id), email=user.email)
+
+
+@app.post(
+    "/auth/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Auth"],
+)
+def register_user(body: AuthRegisterRequest, db: Session = Depends(get_session)):
+    email = body.email.lower().strip()
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já cadastrado.")
+    try:
+        password_hash = hash_password(body.password)
+    except PasswordValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    user = User(email=email, password_hash=password_hash, last_login_at=datetime.utcnow())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token(str(user.id))
+    return TokenResponse(access_token=token, token_type="bearer", user=_to_user_summary(user))
+
+
+async def _extract_login_credentials(request: Request) -> tuple[str, str]:
+    """Extract username/email and password from JSON or x-www-form-urlencoded payloads."""
+    content_type = (request.headers.get("content-type") or "").lower()
+    body_bytes = await request.body()
+    if not body_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Os campos username/email e password são obrigatórios.",
+        )
+
+    try:
+        if "application/json" in content_type:
+            payload = json.loads(body_bytes.decode("utf-8"))
+            username = payload.get("username") or payload.get("email")
+            password = payload.get("password")
+        else:
+            charset = "utf-8"
+            if "charset=" in content_type:
+                charset = content_type.split("charset=")[-1].split(";")[0].strip() or "utf-8"
+            form_data = parse_qs(body_bytes.decode(charset))
+            username = form_data.get("username", form_data.get("email", [None]))[0]
+            password = form_data.get("password", [None])[0]
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não foi possível interpretar o corpo da requisição.",
+        ) from exc
+
+    if not username or not password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Os campos username/email e password são obrigatórios.",
+        )
+    return username, password
+
+
+@app.post(
+    "/auth/login",
+    response_model=TokenResponse,
+    tags=["Auth"],
+)
+async def login_user(
+    request: Request,
+    db: Session = Depends(get_session),
+):
+    username, password = await _extract_login_credentials(request)
+
+    user = authenticate_user(db, username.strip().lower(), password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user.last_login_at = datetime.utcnow()
+    user.updated_at = datetime.utcnow()
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token(str(user.id))
+    return TokenResponse(access_token=token, token_type="bearer", user=_to_user_summary(user))
+
+
+@app.get("/auth/me", response_model=AuthMeResponse, tags=["Auth"])
+def get_me(current_user: User = Depends(get_current_user)):
+    return AuthMeResponse(id=str(current_user.id), email=current_user.email)
+
+
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok"}
 
 
 @app.post("/update-session", tags=["Sessions"])
-def update_session(data: UpdateSessionRequest):
+def update_session(
+    data: UpdateSessionRequest,
+    current_user: User = Depends(get_current_user),
+):
     try:
         cookies_json = json.loads(data.cookie_string)
-        cj = http.cookiejar.MozillaCookieJar(SESSION_FILE_PATH)
+        session_path = session_file_for_user(current_user.id)
+        cj = http.cookiejar.MozillaCookieJar(str(session_path))
         
         for cookie_data in cookies_json:
             c = http.cookiejar.Cookie(
@@ -132,7 +245,11 @@ def update_session(data: UpdateSessionRequest):
         
         cj.save(ignore_discard=True, ignore_expires=True)
         
-        return {"status": "ok", "message": "Sessão de cookies atualizada com sucesso e salva em formato Netscape!"}
+        return {
+            "status": "ok",
+            "message": "Sessão de cookies atualizada com sucesso e salva em formato Netscape!",
+            "session_file": str(session_path),
+        }
     
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="A string de cookies fornecida não é um JSON válido.")
@@ -141,9 +258,13 @@ def update_session(data: UpdateSessionRequest):
 
 
 @app.post("/processar", tags=["Video Jobs"])
-def processar_video(data: EditRequest, request: Request):
+def processar_video(
+    data: EditRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     try:
-        client_id = request.client.host if request.client else "anonymous"
+        client_id = current_user.id
         allowed, retry_after = rate_limiter.allow(client_id)
         if not allowed:
             raise HTTPException(
@@ -157,7 +278,17 @@ def processar_video(data: EditRequest, request: Request):
                 detail="Formato 'file' não suportado em jobs assíncronos. Utilize url, base64 ou path.",
             )
 
-        job_id = job_manager.enqueue_video_edit(data.dict())
+        session_path = session_file_for_user(current_user.id)
+        if not session_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="Sessão de cookies não encontrada. Utilize /update-session antes de processar vídeos.",
+            )
+
+        payload = data.dict()
+        payload["user_id"] = current_user.id
+        payload["session_file_path"] = str(session_path)
+        job_id = job_manager.enqueue_video_edit(payload)
         job_info = job_manager.get_job(job_id) or {}
         return {"ok": True, "job_id": job_id, "status": job_info.get("status", "queued")}
     except HTTPException as e:
@@ -168,7 +299,7 @@ def processar_video(data: EditRequest, request: Request):
 
 
 @app.delete("/cleanup", tags=["Maintenance"])
-def cleanup_videos():
+def cleanup_videos(current_user: User = Depends(get_current_user)):
     pastas = ["videos", "processed"]
     removidos = []
 
@@ -188,9 +319,12 @@ def cleanup_videos():
 
 
 @app.get("/jobs/{job_id}", tags=["Video Jobs"])
-def get_job_status(job_id: str):
+def get_job_status(job_id: str, current_user: User = Depends(get_current_user)):
     job = job_manager.get_job(job_id)
     if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    owner_id = job.get("request", {}).get("user_id")
+    if owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Job não encontrado")
     return job
 
@@ -220,24 +354,28 @@ def _serialize_learning_center(center: LearningCenter) -> dict:
 
 
 @app.post("/videos", response_model=VideoSubmissionResponse, status_code=201, tags=["Video Ingestion"])
-def submit_video(data: VideoSubmissionRequest, db: Session = Depends(get_session)):
+def submit_video(
+    data: VideoSubmissionRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     try:
         ingest, clip_models = video_pipeline.ingest_and_suggest(
             db,
-            VideoRequest(user_id=data.user_id, url=data.url, music_asset_id=data.music_id),
+            VideoRequest(user_id=current_user.id, url=data.url, music_asset_id=data.music_id),
         )
         return VideoSubmissionResponse.model_validate(
             {
-                "id": ingest.id,
+                "id": str(ingest.id),
                 "status": ingest.status.value if hasattr(ingest.status, "value") else ingest.status,
                 "duration_seconds": float(ingest.duration_seconds) if ingest.duration_seconds else None,
                 "options": [
                     {
-                        "id": clip.id,
+                        "id": str(clip.id),
                         "option_order": clip.option_order,
                         "variant_label": clip.variant_label,
                         "description": clip.description,
-                        "music_asset_id": clip.music_asset_id,
+                        "music_asset_id": str(clip.music_asset_id) if clip.music_asset_id else None,
                         "video_segments": clip.video_segments,
                         "music_start_seconds": float(clip.music_start_seconds)
                         if clip.music_start_seconds is not None
@@ -260,11 +398,11 @@ def submit_video(data: VideoSubmissionRequest, db: Session = Depends(get_session
 
 def _clip_to_dict(clip):
     return {
-        "id": clip.id,
+        "id": str(clip.id),
         "option_order": clip.option_order,
         "variant_label": clip.variant_label,
         "description": clip.description,
-        "music_asset_id": clip.music_asset_id,
+        "music_asset_id": str(clip.music_asset_id) if clip.music_asset_id else None,
         "video_segments": clip.video_segments,
         "music_start_seconds": float(clip.music_start_seconds) if clip.music_start_seconds is not None else None,
         "music_end_seconds": float(clip.music_end_seconds) if clip.music_end_seconds is not None else None,
@@ -274,14 +412,18 @@ def _clip_to_dict(clip):
 
 
 @app.get("/videos/{video_id}", response_model=VideoDetailResponse, tags=["Video Ingestion"])
-def get_video_detail(video_id: str, db: Session = Depends(get_session)):
+def get_video_detail(
+    video_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     ingest = (
         db.query(VideoIngest)
         .options(
             joinedload(VideoIngest.clip_models),
             joinedload(VideoIngest.analysis),
         )
-        .filter(VideoIngest.id == video_id)
+        .filter(VideoIngest.id == video_id, VideoIngest.user_id == current_user.id)
         .first()
     )
     if not ingest:
@@ -297,7 +439,7 @@ def get_video_detail(video_id: str, db: Session = Depends(get_session)):
 
     return VideoDetailResponse.model_validate(
         {
-            "id": ingest.id,
+            "id": str(ingest.id),
             "status": ingest.status.value if hasattr(ingest.status, "value") else ingest.status,
             "duration_seconds": float(ingest.duration_seconds) if ingest.duration_seconds else None,
             "options": [_clip_to_dict(clip) for clip in sorted(ingest.clip_models, key=lambda c: c.option_order)],
@@ -309,7 +451,12 @@ def get_video_detail(video_id: str, db: Session = Depends(get_session)):
 
 
 @app.post("/render/{video_id}", tags=["Video Jobs"])
-def render_video_variants(video_id: str, data: VideoRenderRequest, db: Session = Depends(get_session)):
+def render_video_variants(
+    video_id: str,
+    data: VideoRenderRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     if data.return_format not in {"url"}:
         raise HTTPException(status_code=400, detail="Somente o formato 'url' é suportado.")
     if not data.clip_ids:
@@ -335,6 +482,10 @@ def render_video_variants(video_id: str, data: VideoRenderRequest, db: Session =
         "clip_ids": data.clip_ids,
         "return_format": data.return_format,
     }
+    ingest = db.query(VideoIngest).filter(VideoIngest.id == video_id, VideoIngest.user_id == current_user.id).first()
+    if not ingest:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado")
+    job_payload["user_id"] = current_user.id
     job_id = job_manager.enqueue_video_edit(job_payload)
     job_info = job_manager.get_job(job_id) or {}
     return {"ok": True, "job_id": job_id, "status": job_info.get("status", "queued")}
@@ -347,16 +498,16 @@ def render_video_variants(video_id: str, data: VideoRenderRequest, db: Session =
     tags=["Music Library"],
 )
 def upload_music(
-    user_id: str = Form(...),
     title: str = Form(...),
     description: str | None = Form(None),
     genre: str | None = Form(None),
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
     try:
         metadata = MusicMetadata(
-            user_id=user_id,
+            user_id=current_user.id,
             title=title,
             description=description,
             declared_genre=genre,
@@ -367,8 +518,35 @@ def upload_music(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/music", response_model=list[MusicListItem], tags=["Music Library"])
+def list_music_assets(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    assets = (
+        db.query(MusicAsset)
+        .filter(MusicAsset.user_id == current_user.id)
+        .order_by(MusicAsset.uploaded_at.desc())
+        .all()
+    )
+    return [
+        MusicListItem(
+            id=asset.id,
+            title=asset.title,
+            status=asset.status.value if hasattr(asset.status, "value") else asset.status,
+            genre=asset.genre,
+            uploaded_at=asset.uploaded_at,
+        )
+        for asset in assets
+    ]
+
+
 @app.get("/music/{music_id}", response_model=MusicDetailResponse, tags=["Music Library"])
-def get_music_asset(music_id: str, db: Session = Depends(get_session)):
+def get_music_asset(
+    music_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     asset = (
         db.query(MusicAsset)
         .options(
@@ -376,7 +554,7 @@ def get_music_asset(music_id: str, db: Session = Depends(get_session)):
             joinedload(MusicAsset.embeddings),
             joinedload(MusicAsset.transcription),
         )
-        .filter(MusicAsset.id == music_id)
+        .filter(MusicAsset.id == music_id, MusicAsset.user_id == current_user.id)
         .first()
     )
     if not asset:
@@ -385,11 +563,16 @@ def get_music_asset(music_id: str, db: Session = Depends(get_session)):
 
 
 @app.post("/feedback/music/{music_id}", response_model=FeedbackResponse, status_code=201, tags=["Feedback"])
-def create_music_feedback(music_id: str, body: MusicFeedbackRequest, db: Session = Depends(get_session)):
+def create_music_feedback(
+    music_id: str,
+    body: MusicFeedbackRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     try:
         feedback = feedback_service.record_music_feedback(
             db,
-            user_id=body.user_id,
+            user_id=current_user.id,
             music_asset_id=music_id,
             message=body.message,
             mood=body.mood,
@@ -407,11 +590,15 @@ def create_music_feedback(music_id: str, body: MusicFeedbackRequest, db: Session
 
 
 @app.post("/feedback/artist", response_model=FeedbackResponse, status_code=201, tags=["Feedback"])
-def create_artist_feedback(body: ArtistFeedbackRequest, db: Session = Depends(get_session)):
+def create_artist_feedback(
+    body: ArtistFeedbackRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     try:
         feedback = feedback_service.record_artist_feedback(
             db,
-            user_id=body.user_id,
+            user_id=current_user.id,
             message=body.message,
             mood=body.mood,
             tags=body.tags,
@@ -429,13 +616,19 @@ def create_artist_feedback(body: ArtistFeedbackRequest, db: Session = Depends(ge
 
 
 @app.post("/learning-centers", response_model=LearningCenterResponse, status_code=201, tags=["Learning Centers"])
-def create_learning_center(body: LearningCenterCreateRequest, db: Session = Depends(get_session)):
+def create_learning_center(
+    body: LearningCenterCreateRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     try:
+        scope = body.scope.lower()
+        owner_id = None if scope == "global" else current_user.id
         center = learning_center_service.create(
             db,
             name=body.name,
             scope=body.scope,
-            user_id=body.user_id,
+            user_id=owner_id,
             music_asset_id=body.music_asset_id,
             genre=body.genre,
             description=body.description,
@@ -458,9 +651,22 @@ def create_learning_center(body: LearningCenterCreateRequest, db: Session = Depe
 
 
 @app.put("/learning-centers/{center_id}", response_model=LearningCenterResponse, tags=["Learning Centers"])
-def update_learning_center(center_id: str, body: LearningCenterUpdateRequest, db: Session = Depends(get_session)):
-    center = db.query(LearningCenter).filter(LearningCenter.id == center_id).first()
+def update_learning_center(
+    center_id: str,
+    body: LearningCenterUpdateRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    center = (
+        db.query(LearningCenter)
+        .filter(LearningCenter.id == center_id)
+        .first()
+    )
     if not center:
+        raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
+    if center.user_id and center.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
+    if center.user_id is None and center.scope != "global":
         raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
 
     learning_center_service.update(
@@ -479,9 +685,21 @@ def update_learning_center(center_id: str, body: LearningCenterUpdateRequest, db
 
 
 @app.delete("/learning-centers/{center_id}", response_model=LearningCenterResponse, tags=["Learning Centers"])
-def archive_learning_center(center_id: str, db: Session = Depends(get_session)):
-    center = db.query(LearningCenter).filter(LearningCenter.id == center_id).first()
+def archive_learning_center(
+    center_id: str,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    center = (
+        db.query(LearningCenter)
+        .filter(LearningCenter.id == center_id)
+        .first()
+    )
     if not center:
+        raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
+    if center.user_id and center.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
+    if center.user_id is None and center.scope != "global":
         raise HTTPException(status_code=404, detail="Centro de aprendizado não encontrado")
 
     learning_center_service.archive(db, center)

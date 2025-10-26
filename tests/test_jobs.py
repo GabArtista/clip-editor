@@ -3,6 +3,7 @@ import sys
 import time
 from importlib import import_module
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 
@@ -21,7 +22,7 @@ def _build_test_client(
     monkeypatch: pytest.MonkeyPatch,
     *,
     rate_limit_requests: int = 5,
-) -> TestClient:
+) -> Tuple[TestClient, dict]:
     project_root = Path(__file__).resolve().parents[1]
     monkeypatch.syspath_prepend(str(project_root))
     monkeypatch.chdir(tmp_path)
@@ -70,7 +71,7 @@ def _build_test_client(
     # Patch paths inside jobs.tasks to apontar para tmp_path.
     import jobs.tasks as tasks_module
 
-    monkeypatch.setattr(tasks_module, "SESSION_FILE_PATH", session_file)
+    monkeypatch.setattr(tasks_module, "DEFAULT_SESSION_FILE_PATH", session_file)
     monkeypatch.setattr(tasks_module, "VIDEOS_DIR", videos_dir)
     monkeypatch.setattr(tasks_module, "PROCESSED_DIR", processed_dir)
     monkeypatch.setattr(tasks_module, "MUSIC_DIR", music_dir)
@@ -98,11 +99,34 @@ def _build_test_client(
 
     ensure_multipart_stub()
     app_module = import_module("api.app")
-    return TestClient(app_module.app)
+    client = TestClient(app_module.app)
+
+    register_resp = client.post(
+        "/auth/register",
+        json={"email": "artist@example.com", "password": "secret123"},
+    )
+    assert register_resp.status_code == 201, register_resp.text
+    payload = register_resp.json()
+    token = payload["access_token"]
+    user_id = payload["user"]["id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    update_resp = client.post(
+        "/update-session",
+        json={"cookie_string": "[]"},
+        headers=headers,
+    )
+    assert update_resp.status_code == 200, update_resp.text
+
+    # Garantir que arquivo criado corresponde ao usuário atual.
+    user_session_path = Path(update_resp.json()["session_file"])
+    assert user_session_path.exists()
+
+    return client, headers
 
 
 def test_process_job_sync_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client = _build_test_client(tmp_path, monkeypatch)
+    client, headers = _build_test_client(tmp_path, monkeypatch)
 
     payload = {
         "url": "https://example.com/video",
@@ -112,13 +136,13 @@ def test_process_job_sync_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         "return_format": "url",
     }
 
-    response = client.post("/processar", json=payload)
+    response = client.post("/processar", json=payload, headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
     job_id = data["job_id"]
 
-    status_response = client.get(f"/jobs/{job_id}")
+    status_response = client.get(f"/jobs/{job_id}", headers=headers)
     assert status_response.status_code == 200
     job_data = status_response.json()
     assert job_data["status"] == "done"
@@ -127,7 +151,7 @@ def test_process_job_sync_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_rate_limit_blocks_excess(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client = _build_test_client(tmp_path, monkeypatch, rate_limit_requests=1)
+    client, headers = _build_test_client(tmp_path, monkeypatch, rate_limit_requests=1)
 
     payload = {
         "url": "https://example.com/video",
@@ -137,10 +161,10 @@ def test_rate_limit_blocks_excess(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         "return_format": "url",
     }
 
-    first = client.post("/processar", json=payload)
+    first = client.post("/processar", json=payload, headers=headers)
     assert first.status_code == 200
 
-    second = client.post("/processar", json=payload)
+    second = client.post("/processar", json=payload, headers=headers)
     assert second.status_code == 429
     assert "Limite de processamento" in second.json()["detail"]
 

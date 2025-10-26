@@ -16,7 +16,7 @@ from .config import get_env_float
 from .lock import processing_lock
 from .state import JobStateRepository
 
-SESSION_FILE_PATH = Path("cookies/session.netscape")
+DEFAULT_SESSION_FILE_PATH = Path("cookies/session.netscape")
 VIDEOS_DIR = Path("videos")
 PROCESSED_DIR = Path("processed")
 MUSIC_DIR = Path("music")
@@ -64,7 +64,8 @@ def process_video_job(job_id: str, payload: Dict[str, Any]) -> None:
 
     repo.update_status(job_id, "analyzing", {"message": "Iniciando análise"})
 
-    if not SESSION_FILE_PATH.exists():
+    session_file_path = Path(payload.get("session_file_path") or DEFAULT_SESSION_FILE_PATH)
+    if not session_file_path.exists():
         error_msg = "Arquivo de sessão de cookies não encontrado. Use /update-session primeiro."
         repo.set_error(job_id, error_msg)
         repo.update_status(job_id, "failed", {"message": error_msg})
@@ -73,7 +74,7 @@ def process_video_job(job_id: str, payload: Dict[str, Any]) -> None:
     try:
         with processing_lock(timeout=5.0):
             repo.update_status(job_id, "analyzing", {"message": "Baixando vídeo"})
-            video_path_str = baixar_reel(payload["url"], cookie_file_path=str(SESSION_FILE_PATH))
+            video_path_str = baixar_reel(payload["url"], cookie_file_path=str(session_file_path))
             if not video_path_str:
                 raise RuntimeError("Falha ao baixar o vídeo. Sessão pode estar inválida.")
 

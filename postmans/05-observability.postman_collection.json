@@ -1,0 +1,35 @@
+{
+  "info": {
+    "name": "FALA - 05 Observability",
+    "_postman_id": "00000000-0000-4000-8000-000000000006",
+    "description": "Endpoints auxiliares para monitoramento e manutenção.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Métricas Prometheus",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/metrics",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "metrics"
+          ]
+        },
+        "description": "Retorna métricas no formato de texto do Prometheus."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8060",
+      "type": "string"
+    }
+  ]
+}

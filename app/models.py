@@ -12,13 +12,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
 
-UUID_STR = String(36)
-
-
-def _uuid_str() -> str:
-    return str(uuid.uuid4())
-
-
 class AssetStatus(str, enum.Enum):
     pending = "pending"
     processing = "processing"
@@ -27,15 +20,27 @@ class AssetStatus(str, enum.Enum):
     archived = "archived"
 
 
+class UserStatus(str, enum.Enum):
+    active = "active"
+    invited = "invited"
+    suspended = "suspended"
+    deleted = "deleted"
+
+
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    email: Mapped[Optional[str]] = mapped_column(String(255))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255))
-    status: Mapped[Optional[str]] = mapped_column(String(32), default="active")
+    status: Mapped[UserStatus] = mapped_column(
+        Enum(UserStatus, name="user_status", native_enum=False),
+        default=UserStatus.active,
+        nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     music_assets: Mapped[List["MusicAsset"]] = relationship(back_populates="user")
     video_ingests: Mapped[List["VideoIngest"]] = relationship(back_populates="user")
@@ -48,12 +53,12 @@ class User(Base):
 class AudioFile(Base):
     __tablename__ = "audio_files"
 
-    id: Mapped[str] = mapped_column(
-        UUID_STR,
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
         primary_key=True,
-        default=_uuid_str,
+        default=uuid.uuid4,
     )
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     original_filename: Mapped[Optional[str]] = mapped_column(String(255))
     mime_type: Mapped[Optional[str]] = mapped_column(String(128))
@@ -72,9 +77,9 @@ User.audio_files = relationship("AudioFile", back_populates="user", cascade="all
 class MusicAsset(Base):
     __tablename__ = "music_assets"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
-    audio_file_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("audio_files.id", ondelete="RESTRICT"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    audio_file_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("audio_files.id", ondelete="RESTRICT"))
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text())
     genre: Mapped[Optional[str]] = mapped_column(String(128))
@@ -109,8 +114,8 @@ class MusicAsset(Base):
 class MusicTranscription(Base):
     __tablename__ = "music_transcriptions"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    music_asset_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    music_asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="CASCADE"))
     transcript_text: Mapped[Optional[str]] = mapped_column(Text())
     transcript_json: Mapped[Optional[dict]] = mapped_column(JSON)
     language: Mapped[str] = mapped_column(String(8), default="pt")
@@ -125,8 +130,8 @@ class MusicTranscription(Base):
 class MusicBeat(Base):
     __tablename__ = "music_beats"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    music_asset_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    music_asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="CASCADE"))
     timestamp_seconds: Mapped[float] = mapped_column(Numeric(10, 2))
     beat_type: Mapped[str] = mapped_column(String(32), default="beat")
     confidence: Mapped[Optional[float]] = mapped_column(Numeric(5, 2))
@@ -138,8 +143,8 @@ class MusicBeat(Base):
 class MusicEmbedding(Base):
     __tablename__ = "music_embeddings"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    music_asset_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    music_asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="CASCADE"))
     embedding_type: Mapped[str] = mapped_column(String(64))
     vector: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -150,10 +155,10 @@ class MusicEmbedding(Base):
 class VideoIngest(Base):
     __tablename__ = "video_ingests"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
-    music_asset_id: Mapped[Optional[str]] = mapped_column(
-        UUID_STR,
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    music_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("music_assets.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -184,9 +189,9 @@ class VideoIngest(Base):
 class VideoAnalysis(Base):
     __tablename__ = "video_analysis"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    video_ingest_id: Mapped[str] = mapped_column(
-        UUID_STR,
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    video_ingest_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("video_ingests.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -201,14 +206,14 @@ class VideoAnalysis(Base):
 class VideoClipModel(Base):
     __tablename__ = "video_clip_models"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    video_ingest_id: Mapped[str] = mapped_column(
-        UUID_STR,
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    video_ingest_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("video_ingests.id", ondelete="CASCADE"),
         nullable=False,
     )
-    music_asset_id: Mapped[Optional[str]] = mapped_column(
-        UUID_STR,
+    music_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("music_assets.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -229,8 +234,8 @@ class VideoClipModel(Base):
 class AILearningEvent(Base):
     __tablename__ = "ai_learning_events"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     source: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)
     weight: Mapped[float] = mapped_column(Numeric(5, 2), default=1.0)
@@ -242,9 +247,9 @@ class AILearningEvent(Base):
 class MusicFeedback(Base):
     __tablename__ = "music_feedback"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    music_asset_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="CASCADE"))
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    music_asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     message: Mapped[str] = mapped_column(Text())
     mood: Mapped[Optional[str]] = mapped_column(String(32))
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON)
@@ -259,9 +264,9 @@ class MusicFeedback(Base):
 class ArtistFeedback(Base):
     __tablename__ = "artist_feedback"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    user_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
-    music_asset_id: Mapped[Optional[str]] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="SET NULL"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    music_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="SET NULL"))
     message: Mapped[str] = mapped_column(Text())
     mood: Mapped[Optional[str]] = mapped_column(String(32))
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON)
@@ -276,7 +281,7 @@ class ArtistFeedback(Base):
 class GlobalGenreProfile(Base):
     __tablename__ = "global_genre_profiles"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     genre: Mapped[str] = mapped_column(String(128), unique=True)
     metrics: Mapped[Optional[dict]] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -285,13 +290,13 @@ class GlobalGenreProfile(Base):
 class LearningCenter(Base):
     __tablename__ = "learning_centers"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text())
     scope: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="active")
-    user_id: Mapped[Optional[str]] = mapped_column(UUID_STR, ForeignKey("users.id", ondelete="CASCADE"))
-    music_asset_id: Mapped[Optional[str]] = mapped_column(UUID_STR, ForeignKey("music_assets.id", ondelete="SET NULL"))
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    music_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("music_assets.id", ondelete="SET NULL"))
     genre: Mapped[Optional[str]] = mapped_column(String(128))
     is_experimental: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -312,8 +317,8 @@ class LearningCenter(Base):
 class LearningCenterHistory(Base):
     __tablename__ = "learning_center_history"
 
-    id: Mapped[str] = mapped_column(UUID_STR, primary_key=True, default=_uuid_str)
-    learning_center_id: Mapped[str] = mapped_column(UUID_STR, ForeignKey("learning_centers.id", ondelete="CASCADE"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    learning_center_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("learning_centers.id", ondelete="CASCADE"))
     version: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(32))
     payload: Mapped[Optional[dict]] = mapped_column(JSON)
