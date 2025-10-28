@@ -3,6 +3,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 from .config import job_storage_dir
 
@@ -45,8 +46,14 @@ class JobStateRepository:
     def _write(self, job_id: str, data: Dict[str, Any]) -> None:
         path = self._job_path(job_id)
         tmp_path = path.with_suffix(".tmp")
+        def _default(value: Any) -> Any:
+            if isinstance(value, UUID):
+                return str(value)
+            if isinstance(value, Path):
+                return str(value)
+            return value
         with tmp_path.open("w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
+            json.dump(data, fh, ensure_ascii=False, indent=2, default=_default)
         tmp_path.replace(path)
 
     def update_status(self, job_id: str, status: str, detail: Optional[Any] = None) -> Dict[str, Any]:

@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs
+from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse
@@ -23,7 +24,7 @@ from app.schemas.feedback import (
 )
 from app.schemas.music import MusicDetailResponse, MusicListItem, MusicUploadResponse
 from app.schemas.auth import AuthMeResponse, AuthRegisterRequest, TokenResponse, UserSummary
-from app.schemas.video import VideoDetailResponse, VideoSubmissionResponse
+from app.schemas.video import VideoDetailResponse, VideoSubmissionResponse, VideoListItem
 from app.services import FeedbackService, LearningCenterService
 from app.services.music_service import MusicMetadata, MusicService
 from app.services.video_pipeline import VideoPipeline, VideoRequest
@@ -324,7 +325,7 @@ def get_job_status(job_id: str, current_user: User = Depends(get_current_user)):
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
     owner_id = job.get("request", {}).get("user_id")
-    if owner_id != current_user.id:
+    if owner_id is None or owner_id != str(current_user.id):
         raise HTTPException(status_code=404, detail="Job não encontrado")
     return job
 
@@ -396,6 +397,32 @@ def submit_video(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/videos", response_model=list[VideoListItem], tags=["Video Ingestion"])
+def list_videos(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    ingests = (
+        db.query(VideoIngest)
+        .options(joinedload(VideoIngest.clip_models))
+        .filter(VideoIngest.user_id == current_user.id)
+        .order_by(VideoIngest.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": str(ingest.id),
+            "status": ingest.status.value if hasattr(ingest.status, "value") else ingest.status,
+            "duration_seconds": float(ingest.duration_seconds) if ingest.duration_seconds else None,
+            "options": [_clip_to_dict(clip) for clip in sorted(ingest.clip_models, key=lambda c: c.option_order)],
+            "source_url": ingest.source_url,
+            "created_at": ingest.created_at,
+            "updated_at": ingest.updated_at,
+        }
+        for ingest in ingests
+    ]
+
+
 def _clip_to_dict(clip):
     return {
         "id": str(clip.id),
@@ -445,6 +472,7 @@ def get_video_detail(
             "options": [_clip_to_dict(clip) for clip in sorted(ingest.clip_models, key=lambda c: c.option_order)],
             "source_url": ingest.source_url,
             "created_at": ingest.created_at,
+            "updated_at": ingest.updated_at,
             "analysis": analysis_payload,
         }
     )
@@ -462,30 +490,40 @@ def render_video_variants(
     if not data.clip_ids:
         raise HTTPException(status_code=400, detail="Informe ao menos um clip_id para renderização.")
 
+    try:
+        clip_uuid_ids = [UUID(clip_id) for clip_id in data.clip_ids]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="clip_id inválido.") from exc
+
     clips = (
         db.query(VideoClipModel)
-        .filter(VideoClipModel.id.in_(data.clip_ids))
+        .filter(VideoClipModel.id.in_(clip_uuid_ids))
         .all()
     )
-    if len(clips) != len(data.clip_ids):
+    if len(clips) != len(clip_uuid_ids):
         found_ids = {clip.id for clip in clips}
-        missing = [clip_id for clip_id in data.clip_ids if clip_id not in found_ids]
+        missing = [str(clip_id) for clip_id in clip_uuid_ids if clip_id not in found_ids]
         raise HTTPException(status_code=404, detail=f"Clipes não encontrados: {', '.join(missing)}")
 
     ingest_ids = {clip.video_ingest_id for clip in clips}
-    if len(ingest_ids) != 1 or video_id not in ingest_ids:
+    try:
+        video_uuid = UUID(video_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="video_id inválido.") from exc
+
+    if len(ingest_ids) != 1 or video_uuid not in ingest_ids:
         raise HTTPException(status_code=400, detail="Clipes não pertencem a este vídeo.")
 
     job_payload = {
         "mode": "clip_render",
-        "video_ingest_id": video_id,
-        "clip_ids": data.clip_ids,
+        "video_ingest_id": str(video_uuid),
+        "clip_ids": [str(cid) for cid in clip_uuid_ids],
         "return_format": data.return_format,
     }
-    ingest = db.query(VideoIngest).filter(VideoIngest.id == video_id, VideoIngest.user_id == current_user.id).first()
+    ingest = db.query(VideoIngest).filter(VideoIngest.id == video_uuid, VideoIngest.user_id == current_user.id).first()
     if not ingest:
         raise HTTPException(status_code=404, detail="Vídeo não encontrado")
-    job_payload["user_id"] = current_user.id
+    job_payload["user_id"] = str(current_user.id)
     job_id = job_manager.enqueue_video_edit(job_payload)
     job_info = job_manager.get_job(job_id) or {}
     return {"ok": True, "job_id": job_id, "status": job_info.get("status", "queued")}

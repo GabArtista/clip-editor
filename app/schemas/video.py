@@ -29,7 +29,11 @@ class VideoSubmissionResponse(BaseModel):
         populate_by_name = True
 
 
-class VideoDetailResponse(VideoSubmissionResponse):
+class VideoListItem(VideoSubmissionResponse):
     source_url: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class VideoDetailResponse(VideoListItem):
     analysis: Optional[dict]

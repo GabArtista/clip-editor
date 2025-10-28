@@ -2,6 +2,7 @@ import base64
 import time
 from pathlib import Path
 from typing import Any, Dict, List
+from uuid import UUID
 
 from sqlalchemy.orm import joinedload
 
@@ -152,10 +153,22 @@ def process_video_job(job_id: str, payload: Dict[str, Any]) -> None:
 
 
 def _process_clip_render_job(job_id: str, payload: Dict[str, Any], repo: JobStateRepository) -> None:
-    clip_ids: List[str] = payload.get("clip_ids") or []
-    video_ingest_id: str | None = payload.get("video_ingest_id")
-    if not clip_ids:
+    clip_ids_raw: List[str] = payload.get("clip_ids") or []
+    video_ingest_raw: str | None = payload.get("video_ingest_id")
+    if not clip_ids_raw:
         raise ValueError("Nenhum clip_id informado para renderização.")
+
+    try:
+        clip_ids = [UUID(value) for value in clip_ids_raw]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("clip_id inválido.") from exc
+
+    video_ingest_id: UUID | None = None
+    if video_ingest_raw:
+        try:
+            video_ingest_id = UUID(video_ingest_raw)
+        except ValueError as exc:
+            raise ValueError("video_ingest_id inválido.") from exc
 
     start_time = time.perf_counter()
     with session_scope() as session:
@@ -172,7 +185,7 @@ def _process_clip_render_job(job_id: str, payload: Dict[str, Any], repo: JobStat
 
         if len(clips) != len(clip_ids):
             found_ids = {clip.id for clip in clips}
-            missing = [clip_id for clip_id in clip_ids if clip_id not in found_ids]
+            missing = [str(clip_id) for clip_id in clip_ids if clip_id not in found_ids]
             raise ValueError(f"Clipes não encontrados: {', '.join(missing)}")
 
         ingest_ids = {clip.video_ingest_id for clip in clips}
@@ -228,7 +241,7 @@ def _process_clip_render_job(job_id: str, payload: Dict[str, Any], repo: JobStat
                     duration = max(0.1, end - start)
                     trim = {"start": start, "duration": duration}
 
-                filename = f"{ingest.id}_{clip.option_order}_{clip.id[:8]}.mp4"
+                filename = f"{ingest.id}_{clip.option_order}_{str(clip.id)[:8]}.mp4"
                 output_path = PROCESSED_DIR / filename
 
                 adicionar_musica(

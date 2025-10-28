@@ -7,6 +7,30 @@
   },
   "item": [
     {
+      "name": "Listar Vídeos",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/videos",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "videos"
+          ]
+        },
+        "description": "Retorna todas as ingestões do usuário autenticado ordenadas por criação (desc)."
+      },
+      "response": []
+    },
+    {
       "name": "Submeter Vídeo",
       "request": {
         "method": "POST",
