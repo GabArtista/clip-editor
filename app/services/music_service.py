@@ -20,6 +20,8 @@ from ..models import (
     MusicTranscription,
 )
 from ..settings import music_storage_dir
+from .storage import StorageDriver, get_storage_driver
+from .audio_analyzer import get_audio_analyzer
 
 
 @dataclass
@@ -44,20 +46,34 @@ class AnalysisResult:
 
 
 class MusicService:
-    def __init__(self, storage_dir: Optional[Path] = None) -> None:
+    def __init__(self, storage_dir: Optional[Path] = None, storage_driver: Optional[StorageDriver] = None) -> None:
         self.storage_dir = storage_dir or music_storage_dir()
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.storage_driver = storage_driver or get_storage_driver()
+        # Inicializa audio analyzer (lazy loading)
+        self._audio_analyzer = None
 
-    def _save_upload(self, upload: UploadFile) -> tuple[str, int]:
-        suffix = os.path.splitext(upload.filename or "")[1].lower()
-        filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{hashlib.sha1(os.urandom(16)).hexdigest()}{suffix or '.mp3'}"
-        destination = self.storage_dir / filename
-        with destination.open("wb") as output:
-            data = upload.file.read()
-            output.write(data)
-        size = destination.stat().st_size
+    def _save_upload(self, upload: UploadFile, user_id: str, music_id: str) -> tuple[str, int]:
+        """Salva o upload usando o driver de storage configurado."""
+        # Extrai a extensão do arquivo
+        suffix = os.path.splitext(upload.filename or "")[1].lower() or ".mp3"
+        
+        # Define a chave do objeto no formato: media/{user_id}/{music_id}/original.{ext}
+        object_key = f"media/{user_id}/{music_id}/original{suffix}"
+        
+        # Lê o conteúdo do arquivo
+        file_content = upload.file.read()
+        file_size = len(file_content)
+        
+        # Faz upload usando o driver
+        storage_path = self.storage_driver.upload_file(
+            file_content=io.BytesIO(file_content),
+            object_key=object_key,
+            content_type=upload.content_type,
+        )
+        
         upload.file.seek(0)
-        return filename, size
+        return storage_path, file_size
 
     def _calculate_checksum(self, file_obj: io.BufferedReader) -> str:
         file_obj.seek(0)
@@ -67,12 +83,64 @@ class MusicService:
         file_obj.seek(0)
         return sha.hexdigest()
 
-    def _prefill_analysis(self, declared_genre: Optional[str]) -> AnalysisResult:
+    @property
+    def audio_analyzer(self):
+        """Lazy load do audio analyzer."""
+        if self._audio_analyzer is None:
+            self._audio_analyzer = get_audio_analyzer()
+        return self._audio_analyzer
+
+    def _prefill_analysis(self, declared_genre: Optional[str], audio_path: Optional[str] = None) -> AnalysisResult:
+        """Realiza análise de áudio. Usa IA se audio_path fornecido, senão retorna placeholders."""
+        
+        if audio_path and Path(audio_path).exists():
+            try:
+                # Análise real com IA
+                analysis_data = self.audio_analyzer.analyze(audio_path)
+                
+                beats = [
+                    (beat, "beat", 0.8) for beat in analysis_data.get("beats", [])[:50]  # Limita a 50 beats
+                ]
+                
+                # Cria embedding simples baseado em BPM e key
+                embedding_vector = [
+                    analysis_data.get("bpm", 120) / 200.0,  # Normaliza BPM
+                    analysis_data.get("energy", {}).get("mean", 0.5),
+                    float(len(analysis_data.get("beats", [])) / 100),  # Densidade de beats
+                    0.5,  # Placeholder
+                    0.5,  # Placeholder
+                ]
+                embeddings = [("rhythm", {"vector": embedding_vector})]
+                
+                summary = {
+                    "notes": "Análise realizada com IA usando librosa e Whisper",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "bpm_detected": analysis_data.get("bpm"),
+                    "key_detected": analysis_data.get("key"),
+                }
+                
+                return AnalysisResult(
+                    genre_inferred=declared_genre or "desconhecido",
+                    genre_confidence=0.7 if declared_genre else 0.3,
+                    bpm=analysis_data.get("bpm"),
+                    musical_key=analysis_data.get("key"),
+                    transcription_text=analysis_data.get("transcription", ""),
+                    transcription_language=analysis_data.get("language", "pt"),
+                    beats=beats if beats else [(i * 0.5, "beat", 0.8) for i in range(6)],
+                    embeddings=embeddings,
+                    analysis_summary=summary,
+                )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Erro na análise de IA, usando placeholder: {e}")
+        
+        # Fallback para placeholders
         inferred = declared_genre or "desconhecido"
         beats = [(i * 0.5, "beat", 0.8) for i in range(6)]
         embeddings = [("rhythm", {"vector": [0.1 * i for i in range(5)]})]
         summary = {
-            "notes": "Análise prévia placeholder. Substituir por pipeline IA.",
+            "notes": "Análise placeholder (IA indisponível ou falhou)",
             "created_at": datetime.utcnow().isoformat(),
         }
         return AnalysisResult(
@@ -88,13 +156,32 @@ class MusicService:
         )
 
     def create_music_asset(self, db: Session, upload: UploadFile, metadata: MusicMetadata) -> MusicAsset:
-        stored_name, size_bytes = self._save_upload(upload)
-        storage_path = str(self.storage_dir / stored_name)
-
+        # Importa UUID aqui para evitar import circular
+        import uuid as uuid_lib
+        
+        # Converte user_id para UUID se necessário
+        user_id = metadata.user_id
+        if isinstance(user_id, str):
+            user_id = uuid_lib.UUID(user_id)
+        
+        # Cria o asset primeiro para obter o ID
+        asset = MusicAsset(
+            user_id=user_id,
+            title=metadata.title,
+            description=metadata.description,
+            genre=metadata.declared_genre,
+            status=AssetStatus.processing,
+        )
+        db.add(asset)
+        db.flush()
+        
+        # Agora usa o ID do asset para construir o path do storage
+        storage_path, size_bytes = self._save_upload(upload, str(user_id), str(asset.id))
+        
         checksum = self._calculate_checksum(upload.file)
 
         audio = AudioFile(
-            user_id=metadata.user_id,
+            user_id=user_id,
             storage_path=storage_path,
             original_filename=upload.filename,
             mime_type=upload.content_type,
@@ -104,18 +191,16 @@ class MusicService:
         db.add(audio)
         db.flush()
 
-        asset = MusicAsset(
-            user_id=metadata.user_id,
-            audio_file_id=audio.id,
-            title=metadata.title,
-            description=metadata.description,
-            genre=metadata.declared_genre,
-            status=AssetStatus.processing,
-        )
+        # Atualiza o asset com o audio_file_id
+        asset.audio_file_id = audio.id
         db.add(asset)
         db.flush()
 
-        analysis = self._prefill_analysis(metadata.declared_genre)
+        # Pega o caminho do arquivo para análise (temporário, será movido para S3 depois)
+        # Se for storage local, usa o path diretamente
+        audio_path = storage_path if not storage_path.startswith("s3://") else None
+        
+        analysis = self._prefill_analysis(metadata.declared_genre, audio_path=audio_path)
         self._apply_analysis(db, asset, analysis)
 
         asset.status = AssetStatus.ready
@@ -167,7 +252,20 @@ class MusicService:
         db.add_all(list(embedding_records))
 
     def to_response_dict(self, asset: MusicAsset) -> dict:
-        return {
+        # Gera URL presignada se o storage suportar
+        download_url = None
+        if asset.audio_file and asset.audio_file.storage_path:
+            # Tenta extrair a object_key do storage_path
+            if asset.audio_file.storage_path.startswith("s3://"):
+                # Formato: s3://bucket/media/user_id/music_id/original.mp3
+                parts = asset.audio_file.storage_path.split("/")
+                if len(parts) >= 4:
+                    object_key = "/".join(parts[3:])  # Remove s3://bucket/
+                    download_url = self.storage_driver.get_presigned_url(object_key)
+            elif self.storage_driver.file_exists(asset.audio_file.storage_path):
+                download_url = self.storage_driver.get_presigned_url(asset.audio_file.storage_path)
+        
+        result = {
             "id": str(asset.id),
             "title": asset.title,
             "status": asset.status.value if isinstance(asset.status, AssetStatus) else asset.status,
@@ -205,3 +303,8 @@ class MusicService:
                 "confidence": float(asset.transcription.confidence) if asset.transcription.confidence is not None else None,
             },
         }
+        
+        if download_url:
+            result["download_url"] = download_url
+        
+        return result

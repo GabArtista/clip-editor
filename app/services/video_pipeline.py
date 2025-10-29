@@ -9,9 +9,11 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import AssetStatus, MusicAsset, VideoAnalysis, VideoClipModel, VideoIngest
+from app.models import AssetStatus, MusicAsset, VideoAnalysis, VideoClipModel, VideoIngest, LearningCenter
 from app.settings import processed_storage_dir, video_storage_dir
 from scripts.download import baixar_reel
+from .video_analyzer import get_video_analyzer
+from .clip_suggester import get_clip_suggester
 
 
 @dataclass
@@ -26,6 +28,23 @@ class VideoPipeline:
         self.downloader = downloader
         self.video_dir = video_storage_dir()
         self.processed_dir = processed_storage_dir()
+        # Inicializa analyzers (lazy loading)
+        self._video_analyzer = None
+        self._clip_suggester = None
+        
+    @property
+    def video_analyzer(self):
+        """Lazy load do video analyzer."""
+        if self._video_analyzer is None:
+            self._video_analyzer = get_video_analyzer()
+        return self._video_analyzer
+    
+    @property
+    def clip_suggester(self):
+        """Lazy load do clip suggester."""
+        if self._clip_suggester is None:
+            self._clip_suggester = get_clip_suggester()
+        return self._clip_suggester
 
     def ingest_and_suggest(self, db: Session, request: VideoRequest) -> tuple[VideoIngest, List[VideoClipModel]]:
         ingest = self._create_ingest(db, request)
@@ -77,6 +96,32 @@ class VideoPipeline:
             return 30.0
 
     def _analyze(self, db: Session, ingest: VideoIngest) -> VideoAnalysis:
+        """Analisa vídeo usando IA. Usa placeholders se falhar."""
+        
+        # Tenta análise real primeiro
+        if ingest.storage_path and Path(ingest.storage_path).exists():
+            try:
+                video_analysis_data = self.video_analyzer.analyze(ingest.storage_path)
+                
+                analysis = VideoAnalysis(
+                    video_ingest_id=ingest.id,
+                    scene_breakdown={"scenes": video_analysis_data.get("scenes", [])},
+                    motion_stats={
+                        "peaks": video_analysis_data.get("motion_peaks", []),
+                        "stats": video_analysis_data.get("motion_stats", {}),
+                        "energy": video_analysis_data.get("energy", {}),
+                    },
+                    keywords=video_analysis_data.get("keywords", ["movimento", "energia"]),
+                )
+                db.add(analysis)
+                db.flush()
+                return analysis
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Erro na análise de vídeo com IA, usando placeholder: {e}")
+        
+        # Fallback para placeholders
         duration = float(ingest.duration_seconds or 30.0)
         segments = self._split_segments(duration)
         analysis = VideoAnalysis(
@@ -139,8 +184,66 @@ class VideoPipeline:
                 db.add(clip)
                 clip_models.append(clip)
 
+        # Aplica reranqueamento com base no perfil do artista, se existir
+        clip_models = self._rerank_with_artist_profile(db, ingest.user_id, analysis, clip_models)
+
+        # Reatribui option_order após rerank
+        for order, clip in enumerate(clip_models, start=1):
+            clip.option_order = order
+
         db.flush()
         return clip_models
+
+    def _rerank_with_artist_profile(
+        self,
+        db: Session,
+        user_id: str,
+        analysis: VideoAnalysis,
+        clips: List[VideoClipModel],
+    ) -> List[VideoClipModel]:
+        # Busca LearningCenter(scope=artist)
+        center: LearningCenter | None = (
+            db.query(LearningCenter)
+            .filter(LearningCenter.scope == "artist", LearningCenter.user_id == user_id)
+            .order_by(LearningCenter.created_at.asc())
+            .first()
+        )
+        if not center or not center.parameters:
+            return clips
+
+        params = center.parameters or {}
+        profile = params.get("profile") or {}
+        weights = params.get("weights") or {
+            "base_score": 1.0,
+            "mood_affinity": 0.5,
+            "keyword_match": 0.5,
+            "energy_match": 0.3,
+        }
+
+        # Extrai keywords do vídeo
+        video_keywords = set((analysis.keywords or []) if isinstance(analysis.keywords, list) else [])
+        preferred_tags = set((profile.get("tag_counts") or {}).keys())
+
+        def keyword_affinity() -> float:
+            if not video_keywords or not preferred_tags:
+                return 0.0
+            inter = len(video_keywords.intersection(preferred_tags))
+            return min(1.0, inter / max(1, len(preferred_tags)))
+
+        kw_aff = keyword_affinity()
+
+        reranked: List[tuple[float, VideoClipModel]] = []
+        for clip in clips:
+            base = float(clip.score or 0.0)
+            new_score = (
+                weights.get("base_score", 1.0) * base
+                + weights.get("keyword_match", 0.5) * kw_aff * 100.0
+            )
+            clip.score = new_score
+            reranked.append((new_score, clip))
+
+        reranked.sort(key=lambda x: x[0], reverse=True)
+        return [c for _, c in reranked]
 
     def _select_music_assets(
         self, db: Session, user_id: str, preferred_music_id: Optional[str]

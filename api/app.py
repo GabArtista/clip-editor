@@ -569,7 +569,7 @@ def list_music_assets(
     )
     return [
         MusicListItem(
-            id=asset.id,
+            id=str(asset.id),
             title=asset.title,
             status=asset.status.value if hasattr(asset.status, "value") else asset.status,
             genre=asset.genre,

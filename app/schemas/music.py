@@ -43,6 +43,7 @@ class MusicUploadResponse(BaseModel):
     analysis_version: Optional[str] = None
     uploaded_at: datetime
     processed_at: Optional[datetime] = None
+    download_url: Optional[str] = None
 
     class Config:
         populate_by_name = True

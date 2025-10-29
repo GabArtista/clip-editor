@@ -85,6 +85,15 @@ class FeedbackService:
 
         genre = asset.genre_inferred or asset.genre
         self._update_global_genre_profile(session, genre, weight)
+        # Atualiza perfil do artista para personalização futura
+        self._update_artist_profile_from_feedback(
+            session,
+            user_id=user_id,
+            message=message,
+            mood=mood,
+            tags=tags or [],
+            weight=weight or 1.0,
+        )
         return feedback
 
     def record_artist_feedback(
@@ -150,6 +159,15 @@ class FeedbackService:
             labels={"type": "artist", "mood": mood or "unknown"},
             help_text="Total de feedbacks registrados",
         )
+        # Atualiza perfil do artista para personalização futura
+        self._update_artist_profile_from_feedback(
+            session,
+            user_id=user_id,
+            message=message,
+            mood=mood,
+            tags=tags or [],
+            weight=weight or 1.0,
+        )
         return feedback
 
     def _update_global_genre_profile(
@@ -176,6 +194,82 @@ class FeedbackService:
             "genre_profiles_updates_total",
             labels={"genre": genre},
             help_text="Atualizações em perfis globais por gênero",
+        )
+
+    def _update_artist_profile_from_feedback(
+        self,
+        session: Session,
+        *,
+        user_id: str,
+        message: str,
+        mood: Optional[str],
+        tags: List[str],
+        weight: float,
+    ) -> None:
+        """
+        Consolida feedbacks em um perfil simples do artista, armazenado em LearningCenter(scope="artist").
+        Atualiza contadores de moods/tags e pesos de preferência.
+        """
+        # Obtém ou cria o centro do artista
+        center: LearningCenter | None = (
+            session.query(LearningCenter)
+            .filter(LearningCenter.scope == "artist", LearningCenter.user_id == user_id)
+            .order_by(LearningCenter.created_at.asc())
+            .first()
+        )
+        if center is None:
+            center = LearningCenter(
+                name="artist-profile",
+                scope="artist",
+                user_id=user_id,
+                status="active",
+                parameters={},
+            )
+            session.add(center)
+            session.flush()
+            self._record_history(session, center, notes="created-by-feedback")
+
+        params = dict(center.parameters or {})
+
+        # Estrutura básica de perfil
+        profile = params.get("profile") or {
+            "mood_counts": {},
+            "tag_counts": {},
+            "weight_sum": 0.0,
+            "feedback_count": 0,
+        }
+
+        if mood:
+            profile["mood_counts"][mood] = int(profile["mood_counts"].get(mood, 0)) + 1
+
+        for tag in (tags or []):
+            profile["tag_counts"][tag] = int(profile["tag_counts"].get(tag, 0)) + 1
+
+        profile["feedback_count"] = int(profile.get("feedback_count", 0)) + 1
+        profile["weight_sum"] = float(profile.get("weight_sum", 0.0)) + float(weight)
+
+        # Pesos default para rerankeamento, ajustáveis ao longo do tempo
+        default_weights = {
+            "base_score": 1.0,
+            "mood_affinity": 0.5,
+            "keyword_match": 0.5,
+            "energy_match": 0.3,
+        }
+        weights = params.get("weights") or default_weights
+        # Garante todas as chaves
+        for k, v in default_weights.items():
+            weights.setdefault(k, v)
+
+        params["profile"] = profile
+        params["weights"] = weights
+        center.parameters = params
+        center.version += 1
+        center.updated_at = datetime.utcnow()
+        self._record_history(session, center, notes="profile-updated")
+        increment_counter(
+            "learning_center_events_total",
+            labels={"action": "profile_update", "scope": "artist"},
+            help_text="Atualizações de perfil do artista",
         )
 
 class LearningCenterService:

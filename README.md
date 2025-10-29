@@ -47,3 +47,45 @@ Documentação adicional:
 - `docs/local-manual-testing.md`: passo a passo para rodar localmente e validar os fluxos manualmente.
 - `docs/testing-tutorial.md`: guia rápido dos testes automatizados disponíveis.
 - `docs/flow-tutorial.md`: visão orientada a fluxos dos principais endpoints e integrações.
+- `docs/object-storage-migration.md`: suporte a object storage (S3/MinIO) para músicas.
+- `docs/ai-pipeline.md`: pipeline de IA para análise real de áudio e vídeo (librosa, Whisper, CLIP).
+
+## Object Storage (S3/MinIO)
+
+O sistema suporta armazenamento de músicas tanto em disco local quanto em object storage (MinIO/S3). Isso permite maior escalabilidade e reutilização de assets.
+
+Para usar MinIO local:
+
+1. Configure as variáveis no `.env`:
+```bash
+MUSIC_STORAGE_DRIVER=s3
+OBJECT_STORAGE_ENDPOINT=http://127.0.0.1:9000
+OBJECT_STORAGE_ACCESS_KEY=minioadmin
+OBJECT_STORAGE_SECRET_KEY=minioadmin
+```
+
+2. O MinIO já está configurado no `docker-compose.dev.yml`. Console em http://localhost:9001
+
+Veja mais detalhes em `docs/object-storage-migration.md`.
+
+## Pipeline de IA
+
+O sistema agora usa análise real de áudio e vídeo:
+
+- **Áudio**: Librosa detecta BPM, beats e tonalidade. Whisper transcreve automaticamente.
+- **Vídeo**: OpenCV + PySceneDetect detectam cenas. CLIP extrai keywords e conceitos.
+- **Sugestões**: Algoritmo inteligente alinha beats com picos de movimento do vídeo.
+
+**Recursos:**
+- Transcrição automática em múltiplos idiomas
+- Detecção de cenas e picos de ação
+- Sugestões otimizadas de clipes
+- GPU opcional para aceleração
+
+Configuração:
+```bash
+# Modelo Whisper (base recomendado)
+WHISPER_MODEL=base  # tiny, base, small, medium, large
+```
+
+Veja mais detalhes em `docs/ai-pipeline.md`.

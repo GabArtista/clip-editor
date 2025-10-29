@@ -86,6 +86,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except jwt.PyJWTError as exc:
         raise credentials_exception from exc
 
+    # Converte user_id para UUID se for string
+    import uuid as uuid_lib
+    if isinstance(user_id, str):
+        user_id = uuid_lib.UUID(user_id)
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception

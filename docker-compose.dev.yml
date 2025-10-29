@@ -13,8 +13,11 @@ services:
       - fala_media_cache:/app/.data
     depends_on:
       - postgres
+      - minio
     networks:
       - fala-platform
+    environment:
+      - OBJECT_STORAGE_ENDPOINT=http://minio:9000
 
   postgres:
     image: postgres:15-alpine

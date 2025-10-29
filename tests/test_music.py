@@ -2,6 +2,7 @@ import io
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Tuple
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,7 +17,7 @@ else:
 
 
 def _prepare_client(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, use_s3_mock: bool = False
 ) -> Tuple[TestClient, str, Path, "MusicService", Any, dict]:
     runtime_dir = tmp_path / "runtime"
     storage_dir = tmp_path / "storage"
@@ -25,6 +26,8 @@ def _prepare_client(
     db_path = runtime_dir / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     monkeypatch.setenv("MUSIC_STORAGE_DIR", str(storage_dir))
+    if not use_s3_mock:
+        monkeypatch.setenv("MUSIC_STORAGE_DRIVER", "local")
     monkeypatch.setenv("FAKE_REDIS", "1")
     monkeypatch.setenv("JOB_EXECUTION_MODE", "sync")
 
@@ -94,8 +97,13 @@ def test_upload_and_fetch_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert detail["title"] == "Meu Som"
     assert detail["transcription"]["transcript_text"].startswith("Transcrição")
     assert len(detail["beats"]) > 0
-    assert (storage_dir).exists()
-    assert any(storage_dir.iterdir())
+    
+    # Verifica que o arquivo foi armazenado
+    # A estrutura varia dependendo do driver (local vs S3)
+    # Para local: storage_dir/media/{user_id}/{music_id}/original.mp3
+    # Para S3: URL s3://bucket/media/{user_id}/{music_id}/original.mp3
+    media_dir = storage_dir / "media" / user_id
+    assert media_dir.exists() or any(storage_dir.iterdir())
 
 
 def test_list_music_assets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
