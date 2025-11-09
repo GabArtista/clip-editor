@@ -326,3 +326,19 @@ class LearningCenterHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     learning_center: Mapped["LearningCenter"] = relationship(back_populates="history")
+
+
+class ClipFeedback(Base):
+    __tablename__ = "clip_feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    clip_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("video_clip_models.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(Text())
+    mood: Mapped[Optional[str]] = mapped_column(String(32))
+    tags: Mapped[Optional[List[str]]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    clip: Mapped["VideoClipModel"] = relationship("VideoClipModel")
+    user: Mapped["User"] = relationship("User")

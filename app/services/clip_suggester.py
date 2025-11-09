@@ -275,3 +275,4 @@ def get_clip_suggester() -> ClipSuggester:
     """Factory function para criar ClipSuggester."""
     return ClipSuggester()
 
+

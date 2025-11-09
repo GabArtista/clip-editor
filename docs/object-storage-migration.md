@@ -224,3 +224,4 @@ Verifique:
 - [ ] CDN para distribuição global
 - [ ] Lazy loading de metadados
 
+

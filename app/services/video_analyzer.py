@@ -280,7 +280,6 @@ class VideoAnalyzer:
                     # Processa com CLIP
                     inputs = processor(
                         images=frame_resized,
-                        return_tensors="pt",
                         text=candidate_keywords,
                         padding=True,
                         return_tensors="pt",

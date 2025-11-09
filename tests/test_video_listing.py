@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from tests.utils import reset_app_modules
+from tests.utils import reset_app_modules, install_ai_stubs
 
 
 def _setup_environment(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -19,6 +19,7 @@ def _setup_environment(tmp_path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("JOB_EXECUTION_MODE", "sync")
 
     reset_app_modules()
+    install_ai_stubs(monkeypatch)
 
     from importlib import import_module
 

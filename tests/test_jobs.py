@@ -7,7 +7,7 @@ from typing import Tuple
 
 import pytest
 
-from tests.utils import reset_app_modules, ensure_multipart_stub
+from tests.utils import reset_app_modules, ensure_multipart_stub, install_ai_stubs
 
 try:
     from fastapi.testclient import TestClient as _TestClient
@@ -50,6 +50,7 @@ def _build_test_client(
     monkeypatch.setenv("JOB_CLEANUP_INTERVAL_SECONDS", "999999")
 
     reset_app_modules()
+    install_ai_stubs(monkeypatch)
 
     settings_module = import_module("app.settings")
     if hasattr(settings_module, "get_database_url"):

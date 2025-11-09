@@ -10,6 +10,10 @@ def _load_env() -> None:
     """
     Garante que .env.dev seja carregado antes de .env para permitir overrides locais.
     """
+    # Em ambiente de testes, não carregue .env para evitar interferências (ex.: DATABASE_URL de produção)
+    import os as _os
+    if _os.getenv("PYTEST_CURRENT_TEST"):
+        return
     load_dotenv(".env.dev", override=False)
     load_dotenv(".env", override=True)
 

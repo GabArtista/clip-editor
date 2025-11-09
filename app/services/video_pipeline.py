@@ -5,15 +5,17 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
+import uuid as _uuid
 
 from app.models import AssetStatus, MusicAsset, VideoAnalysis, VideoClipModel, VideoIngest, LearningCenter
 from app.settings import processed_storage_dir, video_storage_dir
 from scripts.download import baixar_reel
 from .video_analyzer import get_video_analyzer
 from .clip_suggester import get_clip_suggester
+from .learning import ClipLearningService
 
 
 @dataclass
@@ -31,6 +33,7 @@ class VideoPipeline:
         # Inicializa analyzers (lazy loading)
         self._video_analyzer = None
         self._clip_suggester = None
+        self._clip_learning_service = None
         
     @property
     def video_analyzer(self):
@@ -46,6 +49,13 @@ class VideoPipeline:
             self._clip_suggester = get_clip_suggester()
         return self._clip_suggester
 
+    @property
+    def clip_learning_service(self):
+        """Lazy load do serviço de aprendizado."""
+        if self._clip_learning_service is None:
+            self._clip_learning_service = ClipLearningService()
+        return self._clip_learning_service
+
     def ingest_and_suggest(self, db: Session, request: VideoRequest) -> tuple[VideoIngest, List[VideoClipModel]]:
         ingest = self._create_ingest(db, request)
         analysis = self._analyze(db, ingest)
@@ -60,14 +70,15 @@ class VideoPipeline:
 
     def _create_ingest(self, db: Session, request: VideoRequest) -> VideoIngest:
         storage_path = self._download_video(request.url)
+        duration = min(60.0, self._estimate_duration(storage_path))
         ingest = VideoIngest(
             user_id=request.user_id,
-            music_asset_id=request.music_asset_id,
+            music_asset_id=_uuid.UUID(str(request.music_asset_id)) if request.music_asset_id else None,
             source_url=request.url,
             storage_path=storage_path,
             status=AssetStatus.processing,
             metadata_json={"notes": "placeholder analysis"},
-            duration_seconds=self._estimate_duration(storage_path),
+            duration_seconds=duration,
         )
         db.add(ingest)
         db.flush()
@@ -154,8 +165,12 @@ class VideoPipeline:
         preferred_music_id: Optional[str],
     ) -> List[VideoClipModel]:
         duration = float(ingest.duration_seconds or 30.0)
+        duration = min(duration, 60.0)
         candidate_assets = self._select_music_assets(db, ingest.user_id, preferred_music_id)
         clip_models: List[VideoClipModel] = []
+        music_map: Dict[_uuid.UUID, MusicAsset] = {
+            asset.id: asset for asset, _ in candidate_assets if asset is not None
+        }
 
         for music_asset, count in candidate_assets:
             offsets = self._compute_offsets(duration, count)
@@ -185,7 +200,7 @@ class VideoPipeline:
                 clip_models.append(clip)
 
         # Aplica reranqueamento com base no perfil do artista, se existir
-        clip_models = self._rerank_with_artist_profile(db, ingest.user_id, analysis, clip_models)
+        clip_models = self._rerank_with_artist_profile(db, ingest, analysis, clip_models, music_map)
 
         # Reatribui option_order após rerank
         for order, clip in enumerate(clip_models, start=1):
@@ -197,14 +212,15 @@ class VideoPipeline:
     def _rerank_with_artist_profile(
         self,
         db: Session,
-        user_id: str,
+        ingest: VideoIngest,
         analysis: VideoAnalysis,
         clips: List[VideoClipModel],
+        music_map: Dict[_uuid.UUID, MusicAsset],
     ) -> List[VideoClipModel]:
         # Busca LearningCenter(scope=artist)
         center: LearningCenter | None = (
             db.query(LearningCenter)
-            .filter(LearningCenter.scope == "artist", LearningCenter.user_id == user_id)
+            .filter(LearningCenter.scope == "artist", LearningCenter.user_id == ingest.user_id)
             .order_by(LearningCenter.created_at.asc())
             .first()
         )
@@ -218,10 +234,13 @@ class VideoPipeline:
             "mood_affinity": 0.5,
             "keyword_match": 0.5,
             "energy_match": 0.3,
+            "ai_model": 0.7,
         }
+        learned_model = params.get("learned_model")
 
         # Extrai keywords do vídeo
-        video_keywords = set((analysis.keywords or []) if isinstance(analysis.keywords, list) else [])
+        keywords = analysis.keywords or []
+        video_keywords = set(keywords if isinstance(keywords, list) else [])
         preferred_tags = set((profile.get("tag_counts") or {}).keys())
 
         def keyword_affinity() -> float:
@@ -239,6 +258,30 @@ class VideoPipeline:
                 weights.get("base_score", 1.0) * base
                 + weights.get("keyword_match", 0.5) * kw_aff * 100.0
             )
+
+            if learned_model:
+                music_asset = None
+                if clip.music_asset_id:
+                    music_asset = music_map.get(clip.music_asset_id)
+                    if music_asset is None and clip.music_asset is not None:
+                        music_asset = clip.music_asset
+                    if music_asset is None:
+                        music_asset = (
+                            db.query(MusicAsset)
+                            .filter(MusicAsset.id == clip.music_asset_id)
+                            .first()
+                        )
+                        if music_asset:
+                            music_map[clip.music_asset_id] = music_asset
+                features = self.clip_learning_service.build_features_for_clip(
+                    clip,
+                    analysis,
+                    music_asset,
+                    ingest,
+                )
+                model_score = self.clip_learning_service.predict_score(learned_model, features)
+                new_score += weights.get("ai_model", 0.7) * model_score * 100.0
+
             clip.score = new_score
             reranked.append((new_score, clip))
 
@@ -251,7 +294,7 @@ class VideoPipeline:
         if preferred_music_id:
             asset = (
                 db.query(MusicAsset)
-                .filter(MusicAsset.id == preferred_music_id, MusicAsset.user_id == user_id)
+                .filter(MusicAsset.id == _uuid.UUID(str(preferred_music_id)), MusicAsset.user_id == user_id)
                 .first()
             )
             if not asset:

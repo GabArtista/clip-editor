@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
+import uuid as _uuid
 
 from app.models import (
     AILearningEvent,
@@ -38,7 +39,7 @@ class FeedbackService:
     ) -> MusicFeedback:
         asset = (
             session.query(MusicAsset)
-            .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
+            .filter(MusicAsset.id == _uuid.UUID(str(music_asset_id)), MusicAsset.user_id == user_id)
             .first()
         )
         if not asset:
@@ -112,7 +113,7 @@ class FeedbackService:
         if music_asset_id:
             asset = (
                 session.query(MusicAsset)
-                .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
+                .filter(MusicAsset.id == _uuid.UUID(str(music_asset_id)), MusicAsset.user_id == user_id)
                 .first()
             )
             if not asset:
@@ -227,7 +228,25 @@ class FeedbackService:
             )
             session.add(center)
             session.flush()
-            self._record_history(session, center, notes="created-by-feedback")
+            # Registra histórico de criação
+            session.add(
+                LearningCenterHistory(
+                    learning_center_id=center.id,
+                    version=center.version,
+                    status=center.status,
+                    payload={
+                        "name": center.name,
+                        "description": center.description,
+                        "scope": center.scope,
+                        "user_id": str(center.user_id) if center.user_id else None,
+                        "music_asset_id": str(center.music_asset_id) if center.music_asset_id else None,
+                        "genre": center.genre,
+                        "is_experimental": center.is_experimental,
+                        "parameters": center.parameters,
+                    },
+                    notes="created-by-feedback",
+                )
+            )
 
         params = dict(center.parameters or {})
 
@@ -265,7 +284,25 @@ class FeedbackService:
         center.parameters = params
         center.version += 1
         center.updated_at = datetime.utcnow()
-        self._record_history(session, center, notes="profile-updated")
+        # Registra histórico de atualização
+        session.add(
+            LearningCenterHistory(
+                learning_center_id=center.id,
+                version=center.version,
+                status=center.status,
+                payload={
+                    "name": center.name,
+                    "description": center.description,
+                    "scope": center.scope,
+                    "user_id": str(center.user_id) if center.user_id else None,
+                    "music_asset_id": str(center.music_asset_id) if center.music_asset_id else None,
+                    "genre": center.genre,
+                    "is_experimental": center.is_experimental,
+                    "parameters": center.parameters,
+                },
+                notes="profile-updated",
+            )
+        )
         increment_counter(
             "learning_center_events_total",
             labels={"action": "profile_update", "scope": "artist"},
@@ -413,7 +450,7 @@ class LearningCenterService:
                 raise ValueError("music_scope_requires_music")
             asset_exists = (
                 session.query(MusicAsset.id)
-                .filter(MusicAsset.id == music_asset_id, MusicAsset.user_id == user_id)
+                .filter(MusicAsset.id == _uuid.UUID(str(music_asset_id)), MusicAsset.user_id == user_id)
                 .first()
             )
             if not asset_exists:

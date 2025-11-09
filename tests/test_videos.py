@@ -6,7 +6,7 @@ from typing import List
 
 import pytest
 
-from tests.utils import reset_app_modules, ensure_multipart_stub
+from tests.utils import reset_app_modules, ensure_multipart_stub, install_ai_stubs
 
 try:
     from fastapi.testclient import TestClient as _TestClient
@@ -75,6 +75,8 @@ def _prepare_video_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(pipeline_module, "baixar_reel", fake_downloader, raising=True)
 
+    install_ai_stubs(monkeypatch)
+
     job_tasks = import_module("jobs.tasks")
     monkeypatch.setattr(job_tasks, "adicionar_musica", fake_adicionar_musica, raising=True)
 
@@ -132,7 +134,7 @@ def test_video_submission_with_specific_music(tmp_path: Path, monkeypatch: pytes
 
     response = client.post(
         "/videos",
-        json={"url": "https://example.com/video", "music_id": music_ids[0]},
+        json={"url": "https://example.com/video", "music_id": str(music_ids[0])},
         headers=headers,
     )
     assert response.status_code == 201, response.text
@@ -160,7 +162,7 @@ def test_video_submission_with_specific_music(tmp_path: Path, monkeypatch: pytes
 
 
 def test_video_submission_without_specific_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    client, user_id, music_ids = _prepare_video_client(tmp_path, monkeypatch)
+    client, user_id, music_ids, headers = _prepare_video_client(tmp_path, monkeypatch)
 
     response = client.post(
         "/videos",
@@ -186,7 +188,7 @@ def test_render_variants_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     response = client.post(
         "/videos",
-        json={"url": "https://example.com/video", "music_id": music_ids[0]},
+        json={"url": "https://example.com/video", "music_id": str(music_ids[0])},
         headers=headers,
     )
     assert response.status_code == 201

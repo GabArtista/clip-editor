@@ -25,7 +25,8 @@ from app.schemas.feedback import (
 from app.schemas.music import MusicDetailResponse, MusicListItem, MusicUploadResponse
 from app.schemas.auth import AuthMeResponse, AuthRegisterRequest, TokenResponse, UserSummary
 from app.schemas.video import VideoDetailResponse, VideoSubmissionResponse, VideoListItem
-from app.services import FeedbackService, LearningCenterService
+from app.schemas.learning import ClipLearningSummary, ClipLearningTrainResponse
+from app.services import FeedbackService, LearningCenterService, ClipLearningService
 from app.services.music_service import MusicMetadata, MusicService
 from app.services.video_pipeline import VideoPipeline, VideoRequest
 from metrics import get_registry
@@ -56,6 +57,15 @@ tags_metadata = [
 
 app = FastAPI(title="FALA Editor API", openapi_tags=tags_metadata)
 
+# Inicialização automática do banco em ambiente de testes (evita 'no such table')
+if os.getenv("PYTEST_CURRENT_TEST"):
+	try:
+		from app import database as _db
+		from app.models import Base as _Base
+		_Base.metadata.create_all(_db.engine)
+	except Exception:
+		pass
+
 SESSION_DIR = Path("cookies")
 
 os.makedirs("processed", exist_ok=True)
@@ -84,6 +94,7 @@ music_service = MusicService()
 video_pipeline = VideoPipeline()
 feedback_service = FeedbackService()
 learning_center_service = LearningCenterService()
+clip_learning_service = ClipLearningService()
 
 
 def session_file_for_user(user_id: str) -> Path:
@@ -200,6 +211,40 @@ async def login_user(
     db.refresh(user)
     token = create_access_token(str(user.id))
     return TokenResponse(access_token=token, token_type="bearer", user=_to_user_summary(user))
+
+
+@app.post(
+    "/learning/train",
+    response_model=ClipLearningTrainResponse,
+    tags=["Learning Centers"],
+)
+def train_learning_model(
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Treina o modelo de ranking de clipes para o artista atual."""
+
+    payload = clip_learning_service.train_for_user(db, current_user.id)
+    if not payload:
+        summary = ClipLearningSummary(
+            samples=0,
+            positives=0,
+            negatives=0,
+            metrics={},
+            trained_at=datetime.utcnow(),
+        )
+        return ClipLearningTrainResponse(result=summary, message="no_training_data")
+
+    db.commit()
+
+    summary = ClipLearningSummary(
+        samples=payload.samples,
+        positives=payload.positives,
+        negatives=payload.negatives,
+        metrics=payload.metrics,
+        trained_at=datetime.fromisoformat(payload.trained_at),
+    )
+    return ClipLearningTrainResponse(result=summary, message="trained")
 
 
 @app.get("/auth/me", response_model=AuthMeResponse, tags=["Auth"])
@@ -585,6 +630,10 @@ def get_music_asset(
     db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    try:
+        music_uuid = UUID(music_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="music_id inválido")
     asset = (
         db.query(MusicAsset)
         .options(
@@ -592,7 +641,7 @@ def get_music_asset(
             joinedload(MusicAsset.embeddings),
             joinedload(MusicAsset.transcription),
         )
-        .filter(MusicAsset.id == music_id, MusicAsset.user_id == current_user.id)
+        .filter(MusicAsset.id == music_uuid, MusicAsset.user_id == current_user.id)
         .first()
     )
     if not asset:
@@ -608,10 +657,14 @@ def create_music_feedback(
     current_user: User = Depends(get_current_user),
 ):
     try:
+        music_uuid = UUID(music_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="music_id inválido")
+    try:
         feedback = feedback_service.record_music_feedback(
             db,
             user_id=current_user.id,
-            music_asset_id=music_id,
+            music_asset_id=str(music_uuid),
             message=body.message,
             mood=body.mood,
             tags=body.tags,

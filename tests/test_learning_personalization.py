@@ -5,7 +5,7 @@ from typing import List
 
 import pytest
 
-from tests.utils import reset_app_modules, ensure_multipart_stub
+from tests.utils import reset_app_modules, ensure_multipart_stub, install_ai_stubs
 
 try:
 	from fastapi.testclient import TestClient as _TestClient
@@ -30,9 +30,10 @@ def _prepare_client_with_music(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 	monkeypatch.setenv("MUSIC_STORAGE_DIR", str(music_store))
 	monkeypatch.setenv("VIDEOS_DIR", str(videos_dir))
 	monkeypatch.setenv("PROCESSED_DIR", str(processed_dir))
-	monkeypatch.setenv("JOB_EXECUTION_MODE", "sync")
+    monkeypatch.setenv("JOB_EXECUTION_MODE", "sync")
 
-	reset_app_modules()
+    reset_app_modules()
+    install_ai_stubs(monkeypatch)
 
 	settings_module = import_module("app.settings")
 	if hasattr(settings_module, "get_database_url"):

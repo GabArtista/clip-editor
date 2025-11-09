@@ -248,3 +248,4 @@ python -m whisper download base
 - [ ] Detecção automática de gênero musical
 - [ ] Thumbnails automáticos
 
+

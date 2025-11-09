@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.utils import reset_app_modules, ensure_multipart_stub
+from tests.utils import reset_app_modules, ensure_multipart_stub, install_ai_stubs
 
 try:
     from fastapi.testclient import TestClient as _TestClient
@@ -32,6 +32,7 @@ def _prepare_client(
     monkeypatch.setenv("JOB_EXECUTION_MODE", "sync")
 
     reset_app_modules()
+    install_ai_stubs(monkeypatch)
 
     settings_module = import_module("app.settings")
     if hasattr(settings_module, "get_database_url"):
@@ -142,7 +143,7 @@ def test_list_music_assets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     payload = resp.json()
     assert len(payload) == 2
     ids = [item["id"] for item in payload]
-    assert set(ids) == {asset_one.id, asset_two.id}
+    assert set(ids) == {str(asset_one.id), str(asset_two.id)}
     # Ordenado por uploaded_at desc, logo a segunda criação aparece primeiro.
     assert payload[0]["id"] == asset_two.id
     assert payload[0]["title"] == "Faixa Dois"

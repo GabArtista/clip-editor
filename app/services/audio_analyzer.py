@@ -255,3 +255,4 @@ def get_audio_analyzer(model: str = "base") -> AudioAnalyzer:
     whisper_model = os.getenv("WHISPER_MODEL", model)
     return AudioAnalyzer(whisper_model=whisper_model)
 
+
