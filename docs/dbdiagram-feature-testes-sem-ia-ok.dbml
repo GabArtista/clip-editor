@@ -1,0 +1,70 @@
+// DBML schema para o fluxo simplificado (cadastro, músicas, transcrição e carteira)
+// Importe este arquivo em https://dbdiagram.io/d
+
+Enum user_status {
+  active
+  suspended
+  deleted
+}
+
+Enum wallet_transaction_type {
+  deposit
+  usage
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(255) [not null, unique]
+  password_hash varchar(255) [not null]
+  display_name varchar(255)
+  status user_status [not null, default: 'active']
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table user_music {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  title varchar(255) [not null]
+  description text
+  audio_storage_path varchar(1024) [not null]
+  duration_seconds decimal(10,2)
+  bpm smallint
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table music_transcriptions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_music_id uuid [not null]
+  language varchar(8) [not null, default: 'pt']
+  transcript_text text
+  transcript_json jsonb
+  generated_by varchar(128)
+  confidence decimal(5,2)
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table wallet_accounts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique]
+  currency varchar(8) [not null, default: 'BRL']
+  balance_credits numeric(12,2) [not null, default: 0]
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table wallet_transactions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  wallet_account_id uuid [not null]
+  transaction_type wallet_transaction_type [not null]
+  amount_credits numeric(12,2) [not null]
+  description text
+  reference_id uuid
+  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Ref: user_music.user_id > users.id
+Ref: music_transcriptions.user_music_id > user_music.id
+Ref: wallet_accounts.user_id > users.id
+Ref: wallet_transactions.wallet_account_id > wallet_accounts.id

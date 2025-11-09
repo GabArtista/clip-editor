@@ -1,39 +1,50 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 
-class VideoClipOption(BaseModel):
-    id: str
-    option_order: int
-    variant_label: str
-    description: Optional[str]
-    music_asset_id: Optional[str]
-    video_segments: List[dict]
-    music_start_seconds: Optional[float]
-    music_end_seconds: Optional[float]
-    diversity_tags: Optional[List[str]]
-    score: Optional[float]
+class VideoSuggestionRequest(BaseModel):
+    video_url: HttpUrl
+    video_duration_seconds: float = Field(gt=5)
+    notes: Optional[str] = Field(default=None, max_length=512)
+    music_ids: Optional[List[str]] = None
 
 
-class VideoSubmissionResponse(BaseModel):
-    video_id: str = Field(..., alias="id")
-    status: str
-    duration_seconds: Optional[float]
-    options: List[VideoClipOption]
-
-    class Config:
-        populate_by_name = True
-
-
-class VideoListItem(VideoSubmissionResponse):
-    source_url: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+class VideoSuggestionItem(BaseModel):
+    suggestion_id: str
+    music_id: str
+    start_time_seconds: float
+    end_time_seconds: float
+    reasoning: str
+    prompt: str
 
 
-class VideoDetailResponse(VideoListItem):
-    analysis: Optional[dict]
+class VideoSuggestionResponse(BaseModel):
+    items: List[VideoSuggestionItem]
+
+
+class VideoVariationRequest(BaseModel):
+    video_url: HttpUrl
+    video_duration_seconds: float = Field(gt=5)
+    notes: Optional[str] = Field(default=None, max_length=512)
+    music_id: str
+
+
+class VideoVariationSegment(BaseModel):
+    label: str
+    video_start: float
+    video_end: float
+    music_offset: float
+
+
+class VideoVariationItem(BaseModel):
+    variation_id: str
+    music_id: str
+    description: str
+    segments: List[VideoVariationSegment]
+
+
+class VideoVariationResponse(BaseModel):
+    items: List[VideoVariationItem]

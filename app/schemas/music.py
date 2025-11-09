@@ -1,57 +1,38 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
-class MusicBeatSchema(BaseModel):
-    timestamp_seconds: float
-    beat_type: str
-    confidence: Optional[float] = None
-
-
-class MusicEmbeddingSchema(BaseModel):
-    embedding_type: str
-    vector: dict
-
-
-class MusicTranscriptionSchema(BaseModel):
-    transcript_text: Optional[str]
-    language: str
-    model_version: Optional[str] = None
-    confidence: Optional[float] = None
-
-
-class MusicListItem(BaseModel):
+class MusicUploadResponse(BaseModel):
     id: str
     title: str
-    status: str
-    genre: Optional[str] = None
-    uploaded_at: datetime
+    duration_seconds: float | None
+    bpm: int | None
+    created_at: datetime
 
 
-class MusicUploadResponse(BaseModel):
-    music_id: str = Field(..., alias="id")
-    title: str
-    status: str
-    genre: Optional[str] = None
-    genre_inferred: Optional[str] = None
-    bpm: Optional[int] = None
-    musical_key: Optional[str] = None
-    analysis_version: Optional[str] = None
-    uploaded_at: datetime
-    processed_at: Optional[datetime] = None
-
-    class Config:
-        populate_by_name = True
+class MusicListItem(MusicUploadResponse):
+    description: str | None = None
+    has_transcription: bool = False
 
 
-class MusicDetailResponse(MusicUploadResponse):
-    description: Optional[str] = None
-    genre_confidence: Optional[float] = None
-    analysis_summary: Optional[dict] = None
-    beats: List[MusicBeatSchema]
-    embeddings: List[MusicEmbeddingSchema]
-    transcription: Optional[MusicTranscriptionSchema]
+class MusicDetailResponse(MusicListItem):
+    transcript_text: str | None = None
+    language: str | None = None
+
+
+class MusicTranscriptionRequest(BaseModel):
+    language: str = Field(default="pt", min_length=2, max_length=8)
+
+
+class MusicTranscriptionResponse(BaseModel):
+    id: str
+    music_id: str
+    language: str
+    transcript_text: str | None
+    confidence: float | None
+    generated_by: str | None
+    created_at: datetime

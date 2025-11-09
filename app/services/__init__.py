@@ -1,3 +1,1 @@
-"""Service layer exports."""
-
-from .feedback_service import FeedbackService, LearningCenterService  # noqa: F401
+"""Core service layer for the simplified IA workflow."""

@@ -1,1 +1,1 @@
-# Pydantic schemas namespace.
+"""Pydantic schemas for the simplified API."""

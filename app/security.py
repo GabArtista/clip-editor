@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import uuid
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -86,7 +87,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except jwt.PyJWTError as exc:
         raise credentials_exception from exc
 
-    user = db.query(User).filter(User.id == user_id).first()
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except (TypeError, ValueError) as exc:
+        raise credentials_exception from exc
+
+    user = db.query(User).filter(User.id == user_uuid).first()
     if user is None:
         raise credentials_exception
     return user

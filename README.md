@@ -1,49 +1,62 @@
-# FALA Clip Editor
+# FALA Viral Backend
 
-Ferramentas para automatizar a edição de vídeos de música.
+Backend FastAPI responsável por:
 
-## Executando localmente (modo sandbox)
+- Cadastro e autenticação dos artistas.
+- Biblioteca de músicas com upload seguro e armazenamento local.
+- Transcrição das faixas via IA (com cálculo automático de custo).
+- Geração de sugestões de cortes e variações de edição usando contextos das músicas + anotações do vídeo.
+- Carteira de créditos (depósitos e consumo a cada operação que usa IA).
 
-1. Copie `.env.dev` para `.env` e ajuste variáveis se necessário.
-2. Instale dependências Python:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. Suba a stack de desenvolvimento (API + Postgres + MinIO):
-   ```bash
-   docker compose -f docker-compose.dev.yml up --build
-   ```
-4. Aplique migrações para provisionar o schema:
-   ```bash
-   alembic upgrade head
-   ```
-5. Para desenvolvimento rápido é possível definir `JOB_EXECUTION_MODE=sync` no `.env` e processar jobs inline. Para o fluxo assíncrono padrão, inicialize o worker RQ:
-   ```bash
-   rq worker video-edit
-   ```
-6. A API FastAPI ficará disponível em `http://localhost:8060`.
+## Executando localmente
 
-### Endpoints principais
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn api.app:app --reload --port 8060
+```
 
-- `POST /music` — upload de músicas (multipart) com metadados e disparo da análise automática.
-- `GET /music/{music_id}` — consulta detalhes da análise (transcrição placeholder, batidas e embeddings simulados).
-- `POST /videos` — registra vídeo a partir do link, gera análise placeholder e modelos de clipes (2 variações por música sugerida ou 3 quando uma música é informada).
-- `GET /videos/{video_id}` — retorna detalhes do vídeo analisado e todos os modelos de clipe salvos.
-- `POST /render/{video_id}` — renderiza, de forma sequencial, os modelos selecionados e devolve os arquivos gerados.
-- `POST /feedback/music/{music_id}` — registra feedback textual específico da música e alimenta o aprendizado global.
-- `POST /feedback/artist` — registra feedback geral do artista (ou contextual de uma música) para personalização.
-- `POST /learning-centers` / `PUT /learning-centers/{id}` / `DELETE /learning-centers/{id}` — gerenciam centros de aprendizado versionados (global, artista ou música).
-- `GET /metrics` — exporta métricas em formato Prometheus (requisições, jobs, tokens estimados, etc.).
+Variáveis importantes (defina em `.env` ou `.env.dev`):
 
-> Exceto por `/health` e `/metrics`, todos os endpoints exigem Bearer token obtido em `/auth/register` ou `/auth/login`.
+| Variável | Função |
+| --- | --- |
+| `DATABASE_URL` | Postgres ou SQLite (fallback `runtime/app.db`). |
+| `MUSIC_STORAGE_DIR` | Pasta para os uploads das músicas. |
+| `OPENAI_API_KEY` | Chave para uso real da LLM. Sem ela o sistema usa um modo determinístico offline. |
+| `IA_*` | Custos por operação (áudio, visão, tokens, taxa extra). |
 
-Documentação adicional:
+## Principais endpoints
 
-- `docs/platform-overview.md`: visão geral da arquitetura.
-- `docs/schema/dbdiagram.dbml`: modelo do banco para o dbdiagram.
-- `docs/migrations.md`: guia de uso do Alembic.
-- `docs/local-manual-testing.md`: passo a passo para rodar localmente e validar os fluxos manualmente.
-- `docs/testing-tutorial.md`: guia rápido dos testes automatizados disponíveis.
-- `docs/flow-tutorial.md`: visão orientada a fluxos dos principais endpoints e integrações.
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST /auth/register` | Cria usuário + carteira e já devolve token. |
+| `POST /auth/login` | Login tradicional (retorna token). |
+| `GET /me` | Dados do usuário autenticado + saldo. |
+| `POST /wallet/deposit` | Depósito manual em créditos (R$). |
+| `GET /wallet/transactions` | Últimas movimentações. |
+| `POST /music` | Upload da música (multipart). |
+| `GET /music` / `GET /music/{id}` | Listagem e detalhes (inclui transcrição). |
+| `POST /music/{id}/transcribe` | Dispara a IA de transcrição e debita o custo. |
+| `POST /videos/suggestions` | Recebe link + duração do vídeo e retorna 3 sugestões combinando música + visão. |
+| `POST /videos/variations` | Gera 3 variações de edição para uma música já escolhida. |
+
+Os endpoints de vídeo não persistem nada: eles apenas retornam as três opções calculadas na hora.
+
+## Custos e carteira
+
+Cada operação que usa IA chama o `CostCalculator`, que:
+
+1. Estima o custo da OpenAI com base na duração ou na quantidade estimada de tokens (sempre arredondando para o pior caso).
+2. Soma a taxa fixa interna definida em `IA_PLATFORM_EXTRA_FEE_BRL` (padrão R$ 0,30).
+3. Debita o valor total da carteira do usuário antes de executar a IA.
+
+Sem saldo suficiente, o endpoint devolve **402 Payment Required**.
+
+## Testes
+
+```bash
+pytest
+```
+
+Os testes usam SQLite e um modo determinístico de IA (sem chamar a OpenAI). Para testar contra a API real, basta definir `OPENAI_API_KEY` e remover os limites na infraestrutura.

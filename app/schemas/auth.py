@@ -1,22 +1,30 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
+
+from app.models import UserStatus
 
 
 class AuthRegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=8, max_length=72)
+    display_name: Optional[str] = Field(default=None, max_length=255)
 
     @field_validator("email")
     @classmethod
-    def _validate_email(cls, value: str) -> str:
+    def _normalize_email(cls, value: str) -> str:
         value = value.strip().lower()
-        if "@" not in value or value.startswith("@") or value.endswith("@"):
-            raise ValueError("E-mail inválido.")
-        local, domain = value.split("@", 1)
-        if not local or not domain or "." not in domain:
+        if "@" not in value or "." not in value.split("@", 1)[-1]:
             raise ValueError("E-mail inválido.")
         return value
+
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    password: str
 
     @field_validator("password")
     @classmethod
@@ -28,19 +36,19 @@ class AuthRegisterRequest(BaseModel):
         return value
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: "UserSummary"
-
-
 class UserSummary(BaseModel):
     id: str
     email: str
+    display_name: str | None = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserSummary
 
 
 class AuthMeResponse(UserSummary):
-    pass
-
-
-TokenResponse.model_rebuild()
+    status: UserStatus
+    wallet_balance: Decimal
+    currency: str
