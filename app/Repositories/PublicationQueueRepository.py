@@ -1,10 +1,11 @@
 from typing import Optional, List
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from app.domain.entities.publication_queue import PublicationQueue, PublicationStatus
 from app.domain.repositories.publication_queue_repository import IPublicationQueueRepository
-from app.Models.publication_queue_model import PublicationQueue
+from app.Models.PublicationQueue import PublicationQueue as PublicationQueueModel
 
 
 class PublicationQueueRepository(IPublicationQueueRepository):
@@ -15,7 +16,7 @@ class PublicationQueueRepository(IPublicationQueueRepository):
     
     def create(self, publication: PublicationQueue) -> PublicationQueue:
         """Cria uma nova publicação na fila"""
-        db_publication = PublicationQueue(
+        db_publication = PublicationQueueModel(
             user_id=publication.user_id,
             video_path=publication.video_path,
             video_url=publication.video_url,
@@ -30,16 +31,38 @@ class PublicationQueueRepository(IPublicationQueueRepository):
     
     def get_by_id(self, publication_id: int) -> Optional[PublicationQueue]:
         """Busca publicação por ID"""
-        db_publication = self.db.query(PublicationQueue).filter(
-            PublicationQueue.id == publication_id
+        db_publication = self.db.query(PublicationQueueModel).filter(
+            PublicationQueueModel.id == publication_id
         ).first()
         return db_publication.to_domain() if db_publication else None
     
     def get_by_user_id(self, user_id: int, skip: int = 0, limit: int = 100) -> List[PublicationQueue]:
         """Lista publicações de um usuário"""
-        db_publications = self.db.query(PublicationQueue).filter(
-            PublicationQueue.user_id == user_id
-        ).offset(skip).limit(limit).order_by(PublicationQueue.scheduled_date.desc()).all()
+        db_publications = self.db.query(PublicationQueueModel).filter(
+            PublicationQueueModel.user_id == user_id
+        ).offset(skip).limit(limit).order_by(PublicationQueueModel.scheduled_date.desc()).all()
+        return [pub.to_domain() for pub in db_publications]
+    
+    def get_upcoming_from_now(self, user_id: int, skip: int = 0, limit: int = 100) -> List[PublicationQueue]:
+        """
+        Lista publicações do usuário a partir da data/hora atual
+        Inclui apenas publicações com status PENDING ou SCHEDULED, ordenado pela data agendada (asc)
+        """
+        now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+        db_publications = (
+            self.db.query(PublicationQueueModel)
+            .filter(
+                and_(
+                    PublicationQueueModel.user_id == user_id,
+                    PublicationQueueModel.scheduled_date >= now,
+                    PublicationQueueModel.status.in_([PublicationStatus.PENDING, PublicationStatus.SCHEDULED])
+                )
+            )
+            .order_by(PublicationQueueModel.scheduled_date.asc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
         return [pub.to_domain() for pub in db_publications]
     
     def get_pending_for_month(self, user_id: int, year: int, month: int) -> List[PublicationQueue]:
@@ -50,14 +73,14 @@ class PublicationQueueRepository(IPublicationQueueRepository):
         else:
             end_date = datetime(year, month + 1, 1)
         
-        db_publications = self.db.query(PublicationQueue).filter(
+        db_publications = self.db.query(PublicationQueueModel).filter(
             and_(
-                PublicationQueue.user_id == user_id,
-                PublicationQueue.scheduled_date >= start_date,
-                PublicationQueue.scheduled_date < end_date,
-                PublicationQueue.status.in_([PublicationStatus.PENDING, PublicationStatus.SCHEDULED])
+                PublicationQueueModel.user_id == user_id,
+                PublicationQueueModel.scheduled_date >= start_date,
+                PublicationQueueModel.scheduled_date < end_date,
+                PublicationQueueModel.status.in_([PublicationStatus.PENDING, PublicationStatus.SCHEDULED])
             )
-        ).order_by(PublicationQueue.scheduled_date).all()
+        ).order_by(PublicationQueueModel.scheduled_date).all()
         return [pub.to_domain() for pub in db_publications]
     
     def get_scheduled_for_today(self) -> List[PublicationQueue]:
@@ -65,13 +88,13 @@ class PublicationQueueRepository(IPublicationQueueRepository):
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
         
-        db_publications = self.db.query(PublicationQueue).filter(
+        db_publications = self.db.query(PublicationQueueModel).filter(
             and_(
-                PublicationQueue.scheduled_date >= today_start,
-                PublicationQueue.scheduled_date <= today_end,
-                PublicationQueue.status == PublicationStatus.SCHEDULED
+                PublicationQueueModel.scheduled_date >= today_start,
+                PublicationQueueModel.scheduled_date <= today_end,
+                PublicationQueueModel.status == PublicationStatus.SCHEDULED
             )
-        ).order_by(PublicationQueue.scheduled_date).all()
+        ).order_by(PublicationQueueModel.scheduled_date).all()
         return [pub.to_domain() for pub in db_publications]
     
     def count_by_user_and_month(self, user_id: int, year: int, month: int) -> int:
@@ -82,20 +105,20 @@ class PublicationQueueRepository(IPublicationQueueRepository):
         else:
             end_date = datetime(year, month + 1, 1)
         
-        count = self.db.query(func.count(PublicationQueue.id)).filter(
+        count = self.db.query(func.count(PublicationQueueModel.id)).filter(
             and_(
-                PublicationQueue.user_id == user_id,
-                PublicationQueue.scheduled_date >= start_date,
-                PublicationQueue.scheduled_date < end_date,
-                PublicationQueue.status.in_([PublicationStatus.PENDING, PublicationStatus.SCHEDULED])
+                PublicationQueueModel.user_id == user_id,
+                PublicationQueueModel.scheduled_date >= start_date,
+                PublicationQueueModel.scheduled_date < end_date,
+                PublicationQueueModel.status.in_([PublicationStatus.PENDING, PublicationStatus.SCHEDULED])
             )
         ).scalar()
         return count or 0
     
     def update(self, publication: PublicationQueue) -> PublicationQueue:
         """Atualiza uma publicação"""
-        db_publication = self.db.query(PublicationQueue).filter(
-            PublicationQueue.id == publication.id
+        db_publication = self.db.query(PublicationQueueModel).filter(
+            PublicationQueueModel.id == publication.id
         ).first()
         if not db_publication:
             raise ValueError(f"Publicação com ID {publication.id} não encontrada")
@@ -114,8 +137,8 @@ class PublicationQueueRepository(IPublicationQueueRepository):
     
     def delete(self, publication_id: int) -> bool:
         """Deleta uma publicação"""
-        db_publication = self.db.query(PublicationQueue).filter(
-            PublicationQueue.id == publication_id
+        db_publication = self.db.query(PublicationQueueModel).filter(
+            PublicationQueueModel.id == publication_id
         ).first()
         if not db_publication:
             return False

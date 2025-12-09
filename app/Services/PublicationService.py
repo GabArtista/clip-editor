@@ -62,6 +62,10 @@ class PublicationService:
         """Lista publicações do usuário"""
         return self.publication_repo.get_by_user_id(user_id, skip, limit)
     
+    def get_user_upcoming(self, user_id: int, skip: int = 0, limit: int = 100) -> List[PublicationQueue]:
+        """Lista fila futura do usuário (a partir da data/hora atual)"""
+        return self.publication_repo.get_upcoming_from_now(user_id, skip, limit)
+    
     def cancel_publication(self, publication_id: int, user_id: int) -> bool:
         """Cancela uma publicação"""
         publication = self.publication_repo.get_by_id(publication_id)

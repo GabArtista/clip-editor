@@ -125,6 +125,49 @@ def list_publications(
         )
 
 
+@router.get("/upcoming", response_model=List[PublicationQueueResponseDTO])
+def list_upcoming_publications(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lista a fila futura do usuário (a partir da data/hora atual)
+    
+    Retorna apenas publicações com status PENDING ou SCHEDULED,
+    ordenadas pela data agendada (mais próximas primeiro)
+    """
+    try:
+        publication_repo = PublicationQueueRepository(db)
+        scheduler_service = PublicationSchedulerService(publication_repo)
+        publication_service = PublicationService(publication_repo, scheduler_service)
+        
+        publications = publication_service.get_user_upcoming(current_user.id, skip=skip, limit=limit)
+        
+        return [
+            PublicationQueueResponseDTO(
+                id=pub.id,
+                user_id=pub.user_id,
+                video_path=pub.video_path,
+                video_url=pub.video_url,
+                description=pub.description,
+                scheduled_date=pub.scheduled_date,
+                published_date=pub.published_date,
+                status=pub.status,
+                error_message=pub.error_message,
+                created_at=pub.created_at,
+                updated_at=pub.updated_at
+            )
+            for pub in publications
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar publicações futuras: {str(e)}"
+        )
+
+
 @router.delete("/{publication_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_publication(
     publication_id: int,
