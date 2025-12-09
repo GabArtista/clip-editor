@@ -2,8 +2,8 @@
 Testes de autenticação
 """
 import pytest
-from app.infrastructure.repositories import UserRepository
-from app.domain.services.user_service import UserService
+from app.Repositories.UserRepository import UserRepository
+from app.Services.UserService import UserService
 from app.domain.entities.user import UserRole
 
 
@@ -56,8 +56,8 @@ def test_authenticate_user(db, user_data):
 
 def test_login_endpoint(client, db, user_data):
     """Testa endpoint de login"""
-    from app.infrastructure.repositories import UserRepository
-    from app.domain.services.user_service import UserService
+    from app.Repositories.UserRepository import UserRepository
+    from app.Services.UserService import UserService
     
     # Cria usuário
     user_repo = UserRepository(db)
