@@ -6,10 +6,9 @@ from app.Repositories.UserRepository import UserRepository
 from app.Services.UserService import UserService
 from app.domain.entities.user import User
 from app.Http.Middleware.AuthMiddleware import get_current_user, get_current_admin_user
-    UserCreateDTO,
-    UserUpdateDTO,
-    UserResponseDTO
-)
+from app.Http.Requests.User.CreateUserRequest import CreateUserRequest as UserCreateDTO
+from app.Http.Requests.User.UpdateUserRequest import UpdateUserRequest as UserUpdateDTO
+from app.Http.Resources.UserResource import UserResource as UserResponseDTO
 from app.application.validators import validate_webhook_url
 
 router = APIRouter(prefix="/api/v1/users", tags=["Users"])
