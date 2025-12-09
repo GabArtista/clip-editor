@@ -1,0 +1,2 @@
+# Clip Editor Application
+

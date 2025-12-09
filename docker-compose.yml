@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: clip_editor_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-clip_editor}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-clip_editor_pass}
+      POSTGRES_DB: ${DB_NAME:-clip_editor_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-clip_editor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clip_editor_network
+
+  app:
+    build: .
+    container_name: clip_editor_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-clip_editor}
+      - DB_PASSWORD=${DB_PASSWORD:-clip_editor_pass}
+      - DB_NAME=${DB_NAME:-clip_editor_db}
+      - APP_HOST=${APP_HOST:-0.0.0.0}
+      - APP_PORT=${APP_PORT:-8060}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-https://n8n.dozecrew.com/webhook/98bce4e7-b9b1-4f4f-8c39-3db5955d0b76}
+    ports:
+      - "${APP_PORT:-8060}:8060"
+    volumes:
+      - ./videos:/app/videos
+      - ./processed:/app/processed
+      - ./music:/app/music
+      - ./cookies:/app/cookies
+    networks:
+      - clip_editor_network
+    command: uvicorn app.application.main:app --host 0.0.0.0 --port 8060 --reload
+
+volumes:
+  postgres_data:
+
+networks:
+  clip_editor_network:
+    driver: bridge
+

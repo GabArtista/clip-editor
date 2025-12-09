@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip wheel \
 COPY . .
 
 # Healthcheck (FastAPI docs)
-HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD curl -fsS http://127.0.0.1:8060/docs >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD curl -fsS http://127.0.0.1:8060/health >/dev/null || exit 1
 
 EXPOSE 8060
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8060"]
+CMD ["uvicorn", "bootstrap.app:app", "--host", "0.0.0.0", "--port", "8060"]
