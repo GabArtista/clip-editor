@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir --upgrade pip wheel \
 # Código
 COPY . .
 
+# Garantir que os diretórios necessários existam
+RUN mkdir -p music cookies videos processed
+
 # Healthcheck (FastAPI docs)
 HEALTHCHECK --interval=30s --timeout=5s --retries=5 CMD curl -fsS http://127.0.0.1:8060/docs >/dev/null || exit 1
 
