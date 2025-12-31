@@ -335,6 +335,16 @@ def processar_video(data: EditRequest):
             music_impact=data.impact_music
         )
 
+        # Remove vídeo original após processamento bem-sucedido
+        # Seguindo padrão do sistema: não persistir vídeos baixados
+        try:
+            if os.path.exists(video_path):
+                os.remove(video_path)
+                print(f"✅ Vídeo original removido: {video_path}")
+        except Exception as e:
+            # Não falha o processamento se não conseguir remover
+            print(f"⚠️ Aviso: Não foi possível remover vídeo original {video_path}: {e}")
+
         if data.return_format == "url":
             return {"ok": True, "filename": filename, "video_url": f"/videos/{filename}"}
         elif data.return_format == "base64":
