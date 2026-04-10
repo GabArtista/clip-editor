@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     S3_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_ENDPOINT_URL: Optional[str] = None         # para MinIO ou endpoint custom
+    AWS_S3_ADDRESSING_STYLE: Optional[str] = None  # "path" recomendado p/ MinIO
+    S3_ENDPOINT_URL: Optional[str] = None          # alias para endpoint custom
+    S3_FORCE_PATH_STYLE: Optional[bool] = None     # alias para forcing path-style
     
     # Video Edit Settings
     VIDEO_PREVIEW_EXPIRATION_MINUTES: int = 5  # Preview expira em 5 minutos

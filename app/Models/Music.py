@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.Providers.DatabaseServiceProvider import Base
+import uuid
 
 
 class Music(Base):
@@ -9,6 +11,7 @@ class Music(Base):
     __tablename__ = "musics"
     
     id = Column(Integer, primary_key=True, index=True)
+    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     filename = Column(String(255), nullable=False)

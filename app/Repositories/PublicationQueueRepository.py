@@ -40,7 +40,7 @@ class PublicationQueueRepository(IPublicationQueueRepository):
         """Lista publicações de um usuário"""
         db_publications = self.db.query(PublicationQueueModel).filter(
             PublicationQueueModel.user_id == user_id
-        ).offset(skip).limit(limit).order_by(PublicationQueueModel.scheduled_date.desc()).all()
+        ).order_by(PublicationQueueModel.scheduled_date.desc()).offset(skip).limit(limit).all()
         return [pub.to_domain() for pub in db_publications]
     
     def get_upcoming_from_now(self, user_id: int, skip: int = 0, limit: int = 100) -> List[PublicationQueue]:
@@ -84,14 +84,15 @@ class PublicationQueueRepository(IPublicationQueueRepository):
         return [pub.to_domain() for pub in db_publications]
     
     def get_scheduled_for_today(self) -> List[PublicationQueue]:
-        """Lista publicações agendadas para hoje"""
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+        """Lista publicações agendadas para hoje (incluindo as que já passaram do horário)"""
+        now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Busca publicações agendadas para hoje OU que já passaram do horário
+        # (para processar publicações atrasadas também)
         
         db_publications = self.db.query(PublicationQueueModel).filter(
             and_(
                 PublicationQueueModel.scheduled_date >= today_start,
-                PublicationQueueModel.scheduled_date <= today_end,
                 PublicationQueueModel.status == PublicationStatus.SCHEDULED
             )
         ).order_by(PublicationQueueModel.scheduled_date).all()

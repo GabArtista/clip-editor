@@ -9,7 +9,8 @@ from app.Http.Controllers import (
     VideoController,
     VideoEditController,
     PublicationQueueController,
-    TemplateController
+    TemplateController,
+    CookieController
 )
 
 # Router principal da API
@@ -23,4 +24,5 @@ api_router.include_router(VideoController.router)
 api_router.include_router(VideoEditController.router)
 api_router.include_router(PublicationQueueController.router)
 api_router.include_router(TemplateController.router)
+api_router.include_router(CookieController.router)
 

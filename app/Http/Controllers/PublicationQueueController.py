@@ -2,17 +2,18 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.Providers.DatabaseServiceProvider import get_db
-from app.Repositories.PublicationQueueRepository import PublicationQueueRepository, UserRepository
+from app.Repositories.PublicationQueueRepository import PublicationQueueRepository
+from app.Repositories.UserRepository import UserRepository
 from app.Services.PublicationService import PublicationService
 from app.Services.PublicationSchedulerService import PublicationSchedulerService
 from app.domain.entities.user import User
 from app.Http.Middleware.AuthMiddleware import get_current_user
-from app.Http.Requests.publication_dto import (
+from app.Http.Requests.Publication.PublicationDTO import (
     PublicationQueueResponseDTO,
-    PublicationQueueCreateDTO
+    PublicationQueueCreateDTO,
 )
 
-router = APIRouter(prefix="/api/v1/publications", tags=["Publications"])
+router = APIRouter(prefix="/publications", tags=["Publications"])
 
 
 @router.post("", response_model=PublicationQueueResponseDTO, status_code=status.HTTP_201_CREATED)
@@ -193,5 +194,112 @@ def cancel_publication(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao cancelar publicação: {str(e)}"
+        )
+
+
+@router.post("/trigger", status_code=status.HTTP_200_OK)
+async def trigger_publication_worker(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Dispara o worker de publicação manualmente (para testes)
+    Processa todas as publicações agendadas para hoje que já passaram da hora
+    """
+    try:
+        from app.Jobs.PublicationJob import get_worker
+        
+        worker = get_worker()
+        await worker.process_daily_publications()
+        
+        return {
+            "ok": True,
+            "message": "Worker de publicação executado com sucesso"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao executar worker: {str(e)}"
+        )
+
+
+@router.post("/{publication_id}/publish-now", status_code=status.HTTP_200_OK)
+async def publish_now(
+    publication_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Força publicação imediata de uma publicação específica
+    Ignora a data agendada e publica agora via N8N
+    """
+    try:
+        publication_repo = PublicationQueueRepository(db)
+        publication = publication_repo.get_by_id(publication_id)
+        
+        if not publication:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Publicação não encontrada"
+            )
+        
+        if publication.user_id != current_user.id and not current_user.is_admin():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não tem permissão para modificar esta publicação"
+            )
+        
+        # Verifica se já foi publicada
+        if publication.status.value in ["completed", "processing"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Publicação já está com status: {publication.status.value}"
+            )
+        
+        # Busca usuário para obter webhook
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(publication.user_id)
+        
+        if not user or not user.webhook_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Webhook não configurado"
+            )
+        
+        # Publica imediatamente usando o worker
+        from app.Jobs.PublicationJob import PublicationWorker
+        from datetime import datetime, timezone as tz
+        from zoneinfo import ZoneInfo
+        from app.domain.entities.publication_queue import PublicationStatus
+        
+        SP_TIMEZONE = ZoneInfo("America/Sao_Paulo")
+        
+        # Marca como processando
+        publication.status = PublicationStatus.PROCESSING
+        publication_repo.update(publication)
+        
+        # Publica usando o worker
+        worker = PublicationWorker()
+        await worker._publish_single(publication)
+        
+        # Busca publicação atualizada
+        updated_publication = publication_repo.get_by_id(publication_id)
+        
+        return {
+            "ok": True,
+            "message": "Publicação enviada com sucesso",
+            "publication_id": publication_id,
+            "status": updated_publication.status.value if updated_publication else "unknown",
+            "published_at": updated_publication.published_date.isoformat() if updated_publication and updated_publication.published_date else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao publicar: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao publicar: {str(e)}"
         )
 

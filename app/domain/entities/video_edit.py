@@ -5,6 +5,7 @@ from enum import Enum
 
 
 class VideoEditStatus(str, Enum):
+    PROCESSING_UPLOAD = "processing_upload"  # Upload S3 em andamento
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -34,7 +35,8 @@ class VideoEdit:
         """Verifica se o preview expirou"""
         if not self.expires_at:
             return False
-        return current_time > self.expires_at
+        # Usar >= para considerar exatamente no momento da expiração
+        return current_time >= self.expires_at
     
     def should_be_deleted(self, current_time: datetime) -> bool:
         """Verifica se deve ser deletado (3h após publicação)"""

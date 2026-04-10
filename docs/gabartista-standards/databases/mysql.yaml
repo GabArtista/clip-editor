@@ -1,0 +1,14 @@
+# MySQL Standards (Gabartista)
+
+mysql_standards:
+  engine: InnoDB
+  charset: utf8mb4
+  collation: utf8mb4_unicode_ci
+  fields:
+    - id: CHAR(36)
+    - created_at: DATETIME(6)
+    - updated_at: DATETIME(6)
+    - deleted_at: DATETIME(6)
+  ai_support:
+    - embeddings em JSON
+    - integração via ETL em Python

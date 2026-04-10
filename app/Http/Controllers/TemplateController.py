@@ -5,13 +5,13 @@ from app.Providers.DatabaseServiceProvider import get_db
 from app.Repositories.TemplateRepository import TemplateRepository
 from app.domain.entities.user import User
 from app.Http.Middleware.AuthMiddleware import get_current_user
-from app.Http.Requests.template_dto import (
+from app.Http.Requests.Template.TemplateDTO import (
     TemplateCreateDTO,
     TemplateUpdateDTO,
-    TemplateResponseDTO
+    TemplateResponseDTO,
 )
 
-router = APIRouter(prefix="/api/v1/templates", tags=["Templates"])
+router = APIRouter(prefix="/templates", tags=["Templates"])
 
 
 @router.post("", response_model=TemplateResponseDTO, status_code=status.HTTP_201_CREATED)

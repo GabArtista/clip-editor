@@ -1,8 +1,8 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from app.domain.entities.user import User
+from app.domain.entities.user import User as DomainUser
 from app.domain.repositories.user_repository import IUserRepository
-from app.Models.user_model import User
+from app.Models.User import User as UserModel
 
 
 class UserRepository(IUserRepository):
@@ -11,9 +11,9 @@ class UserRepository(IUserRepository):
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, user: User) -> User:
+    def create(self, user: DomainUser) -> DomainUser:
         """Cria um novo usuário"""
-        db_user = User(
+        db_user = UserModel(
             email=user.email,
             username=user.username,
             password_hash=user.password_hash,
@@ -26,29 +26,39 @@ class UserRepository(IUserRepository):
         self.db.refresh(db_user)
         return db_user.to_domain()
     
-    def get_by_id(self, user_id: int) -> Optional[User]:
+    def get_by_id(self, user_id: int) -> Optional[DomainUser]:
         """Busca usuário por ID"""
-        db_user = self.db.query(User).filter(User.id == user_id).first()
+        db_user = self.db.query(UserModel).filter(UserModel.id == user_id).first()
         return db_user.to_domain() if db_user else None
     
-    def get_by_email(self, email: str) -> Optional[User]:
+    def get_by_email(self, email: str) -> Optional[DomainUser]:
         """Busca usuário por email"""
-        db_user = self.db.query(User).filter(User.email == email).first()
+        db_user = self.db.query(UserModel).filter(UserModel.email == email).first()
         return db_user.to_domain() if db_user else None
     
-    def get_by_username(self, username: str) -> Optional[User]:
+    def get_by_username(self, username: str) -> Optional[DomainUser]:
         """Busca usuário por username"""
-        db_user = self.db.query(User).filter(User.username == username).first()
+        db_user = self.db.query(UserModel).filter(UserModel.username == username).first()
         return db_user.to_domain() if db_user else None
     
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[User]:
+    def get_by_uuid(self, user_uuid: str) -> Optional[DomainUser]:
+        """Busca usuário por UUID"""
+        from uuid import UUID as UUIDType
+        try:
+            uuid_obj = UUIDType(user_uuid) if isinstance(user_uuid, str) else user_uuid
+            db_user = self.db.query(UserModel).filter(UserModel.uuid == uuid_obj).first()
+            return db_user.to_domain() if db_user else None
+        except (ValueError, TypeError):
+            return None
+    
+    def get_all(self, skip: int = 0, limit: int = 100) -> List[DomainUser]:
         """Lista todos os usuários"""
-        db_users = self.db.query(User).offset(skip).limit(limit).all()
+        db_users = self.db.query(UserModel).offset(skip).limit(limit).all()
         return [user.to_domain() for user in db_users]
     
-    def update(self, user: User) -> User:
+    def update(self, user: DomainUser) -> DomainUser:
         """Atualiza um usuário"""
-        db_user = self.db.query(User).filter(User.id == user.id).first()
+        db_user = self.db.query(UserModel).filter(UserModel.id == user.id).first()
         if not db_user:
             raise ValueError(f"Usuário com ID {user.id} não encontrado")
         
@@ -59,6 +69,7 @@ class UserRepository(IUserRepository):
         db_user.role = user.role
         db_user.is_active = user.is_active
         db_user.is_blocked = user.is_blocked
+        db_user.webhook_url = user.webhook_url  # Atualiza webhook_url
         
         self.db.commit()
         self.db.refresh(db_user)
@@ -66,7 +77,7 @@ class UserRepository(IUserRepository):
     
     def delete(self, user_id: int) -> bool:
         """Deleta um usuário"""
-        db_user = self.db.query(User).filter(User.id == user_id).first()
+        db_user = self.db.query(UserModel).filter(UserModel.id == user_id).first()
         if not db_user:
             return False
         

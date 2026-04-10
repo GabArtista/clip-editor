@@ -8,6 +8,7 @@ from app.Http.Controllers.VideoController import router as video_router
 from app.Http.Controllers.VideoEditController import router as video_edit_router
 from app.Http.Controllers.PublicationQueueController import router as publication_router
 from app.Http.Controllers.TemplateController import router as template_router
+from app.Http.Controllers.CookieController import router as cookie_router
 
 # Aliases para compatibilidade
 AuthController = type('AuthController', (), {'router': auth_router})
@@ -17,6 +18,7 @@ VideoController = type('VideoController', (), {'router': video_router})
 VideoEditController = type('VideoEditController', (), {'router': video_edit_router})
 PublicationQueueController = type('PublicationQueueController', (), {'router': publication_router})
 TemplateController = type('TemplateController', (), {'router': template_router})
+CookieController = type('CookieController', (), {'router': cookie_router})
 
 __all__ = [
     "AuthController",
@@ -26,5 +28,6 @@ __all__ = [
     "VideoEditController",
     "PublicationQueueController",
     "TemplateController",
+    "CookieController",
 ]
 

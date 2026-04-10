@@ -46,7 +46,12 @@ class PublicationWorker:
             publications = self.publication_service.process_due_publications()
             
             if not publications:
-                logger.info("Nenhuma publicação agendada para hoje")
+                logger.info("Nenhuma publicação agendada para hoje ou já passou do horário")
+                # Log adicional para debug
+                all_today = self.publication_repo.get_scheduled_for_today()
+                logger.info(f"Total de publicações agendadas para hoje: {len(all_today)}")
+                for pub in all_today:
+                    logger.info(f"  - ID {pub.id}: {pub.scheduled_date} (status: {pub.status})")
                 return
             
             logger.info(f"Processando {len(publications)} publicações...")

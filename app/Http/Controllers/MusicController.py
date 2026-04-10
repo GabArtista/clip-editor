@@ -8,12 +8,13 @@ from app.Repositories.MusicRepository import MusicRepository
 from app.Services.MusicService import MusicService
 from app.domain.entities.user import User
 from app.Http.Middleware.AuthMiddleware import get_current_user
-from app.Http.Requests.Music.CreateMusicRequest import CreateMusicRequest as MusicCreateDTO, MusicUpdateDTO, MusicResponseDTO
+from app.Http.Requests.Music.UpdateMusicRequest import UpdateMusicRequest as MusicUpdateDTO
+from app.Http.Resources.MusicResource import MusicResource as MusicResponseDTO
 from config import settings
-from app.Helpers import get_audio_duration
+from app.Helpers.FFmpegHelper import get_audio_duration
 from app.application.validators import validate_audio_file
 
-router = APIRouter(prefix="/api/v1/musics", tags=["Musics"])
+router = APIRouter(prefix="/musics", tags=["Musics"])
 
 
 @router.post("", response_model=MusicResponseDTO, status_code=status.HTTP_201_CREATED)
@@ -41,8 +42,13 @@ async def upload_music(
                 detail=str(e)
             )
         
-        # Cria diretório se não existir
-        user_music_dir = os.path.join(settings.MUSIC_DIR, str(current_user.id))
+        # Busca user_uuid para usar em caminhos
+        from app.Models.User import User as UserModel
+        db_user = db.query(UserModel).filter(UserModel.id == current_user.id).first()
+        user_uuid = str(db_user.uuid) if db_user else str(current_user.id)
+        
+        # Cria diretório se não existir (usando UUID)
+        user_music_dir = os.path.join(settings.MUSIC_DIR, user_uuid)
         os.makedirs(user_music_dir, exist_ok=True)
         
         # Gera nome único para o arquivo

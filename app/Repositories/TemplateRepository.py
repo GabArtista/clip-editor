@@ -1,9 +1,9 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.domain.entities.template import Template
+from app.domain.entities.template import Template as DomainTemplate
 from app.domain.repositories.template_repository import ITemplateRepository
-from app.Models.template_model import Template
+from app.Models.Template import Template as TemplateModel
 
 
 class TemplateRepository(ITemplateRepository):
@@ -12,9 +12,9 @@ class TemplateRepository(ITemplateRepository):
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, template: Template) -> Template:
+    def create(self, template: DomainTemplate) -> DomainTemplate:
         """Cria um novo template"""
-        db_template = Template(
+        db_template = TemplateModel(
             name=template.name,
             description=template.description,
             template_type=template.template_type,
@@ -29,31 +29,31 @@ class TemplateRepository(ITemplateRepository):
         self.db.refresh(db_template)
         return db_template.to_domain()
     
-    def get_by_id(self, template_id: int) -> Optional[Template]:
+    def get_by_id(self, template_id: int) -> Optional[DomainTemplate]:
         """Busca template por ID"""
-        db_template = self.db.query(Template).filter(
-            Template.id == template_id
+        db_template = self.db.query(TemplateModel).filter(
+            TemplateModel.id == template_id
         ).first()
         return db_template.to_domain() if db_template else None
     
-    def get_public_templates(self, skip: int = 0, limit: int = 100) -> List[Template]:
+    def get_public_templates(self, skip: int = 0, limit: int = 100) -> List[DomainTemplate]:
         """Lista templates públicos"""
-        db_templates = self.db.query(Template).filter(
-            Template.is_public == True
-        ).offset(skip).limit(limit).order_by(Template.usage_count.desc()).all()
+        db_templates = self.db.query(TemplateModel).filter(
+            TemplateModel.is_public == True
+        ).offset(skip).limit(limit).order_by(TemplateModel.usage_count.desc()).all()
         return [t.to_domain() for t in db_templates]
     
-    def get_user_templates(self, user_id: int, skip: int = 0, limit: int = 100) -> List[Template]:
+    def get_user_templates(self, user_id: int, skip: int = 0, limit: int = 100) -> List[DomainTemplate]:
         """Lista templates de um usuário"""
-        db_templates = self.db.query(Template).filter(
-            Template.created_by == user_id
-        ).offset(skip).limit(limit).order_by(Template.created_at.desc()).all()
+        db_templates = self.db.query(TemplateModel).filter(
+            TemplateModel.created_by == user_id
+        ).offset(skip).limit(limit).order_by(TemplateModel.created_at.desc()).all()
         return [t.to_domain() for t in db_templates]
     
-    def update(self, template: Template) -> Template:
+    def update(self, template: DomainTemplate) -> DomainTemplate:
         """Atualiza um template"""
-        db_template = self.db.query(Template).filter(
-            Template.id == template.id
+        db_template = self.db.query(TemplateModel).filter(
+            TemplateModel.id == template.id
         ).first()
         if not db_template:
             raise ValueError(f"Template com ID {template.id} não encontrado")
@@ -71,8 +71,8 @@ class TemplateRepository(ITemplateRepository):
     
     def delete(self, template_id: int) -> bool:
         """Deleta um template"""
-        db_template = self.db.query(Template).filter(
-            Template.id == template_id
+        db_template = self.db.query(TemplateModel).filter(
+            TemplateModel.id == template_id
         ).first()
         if not db_template:
             return False
@@ -83,8 +83,8 @@ class TemplateRepository(ITemplateRepository):
     
     def increment_usage(self, template_id: int) -> bool:
         """Incrementa contador de uso"""
-        db_template = self.db.query(Template).filter(
-            Template.id == template_id
+        db_template = self.db.query(TemplateModel).filter(
+            TemplateModel.id == template_id
         ).first()
         if not db_template:
             return False

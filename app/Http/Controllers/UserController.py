@@ -11,7 +11,7 @@ from app.Http.Requests.User.UpdateUserRequest import UpdateUserRequest as UserUp
 from app.Http.Resources.UserResource import UserResource as UserResponseDTO
 from app.application.validators import validate_webhook_url
 
-router = APIRouter(prefix="/api/v1/users", tags=["Users"])
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.post("", response_model=UserResponseDTO, status_code=status.HTTP_201_CREATED)

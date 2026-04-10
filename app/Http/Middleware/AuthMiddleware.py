@@ -44,9 +44,18 @@ def get_current_user(
 ) -> User:
     """Obtém usuário atual a partir do token"""
     payload = verify_token(token)
-    user_id: int = payload.get("sub")
+    user_id_str = payload.get("sub")
     
-    if user_id is None:
+    if user_id_str is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",

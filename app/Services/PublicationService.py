@@ -89,14 +89,18 @@ class PublicationService:
         
         processed = []
         for pub in today_publications:
-            # Verifica se é hora de publicar (com margem de 1 hora)
+            # Verifica se é hora de publicar
             if pub.scheduled_date and pub.scheduled_date <= now:
-                # Verifica se não está vencida (realoca se necessário)
-                if pub.is_past_due(now):
+                # Se passou mais de 24 horas, realoca
+                # Caso contrário, processa imediatamente (mesmo que tenha passado alguns minutos)
+                from datetime import timedelta
+                hours_past = (now - pub.scheduled_date).total_seconds() / 3600
+                if hours_past > 24:
+                    # Passou mais de 24h, realoca
                     pub = self.scheduler_service.reschedule_past_due(pub, now)
                     self.publication_repo.update(pub)
                 else:
-                    # Marca como processando
+                    # Passou menos de 24h, processa imediatamente
                     pub.status = PublicationStatus.PROCESSING
                     self.publication_repo.update(pub)
                     processed.append(pub)

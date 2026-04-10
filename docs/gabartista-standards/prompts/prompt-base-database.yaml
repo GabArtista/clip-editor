@@ -1,0 +1,15 @@
+# Prompt Base - Database Standards (Gabartista)
+
+prompt_base_database: |
+  Siga os "Gabartista Database Standards".
+  Crie o modelo de banco de dados para o sistema "{{tipo_de_sistema}}" usando "{{tipo_de_banco}}".
+  Aplique:
+  - UUIDs como PK e IDs externos
+  - Campos created_at, updated_at e deleted_at
+  - Versionamento de schema (migrations)
+  - Estrutura modular por domínio
+  - Compatibilidade com IA (vetores, JSONB, logs semânticos)
+  Gere:
+  - Diagrama ER
+  - Scripts SQL/Migrations
+  - Estrutura de versionamento

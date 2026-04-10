@@ -8,9 +8,13 @@ import os
 # Adiciona o diretório raiz ao path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.infrastructure.database.base import Base
-from app.config import settings
-from app.infrastructure.database.models import UserModel, MusicModel, PublicationQueueModel, VideoEditModel
+from app.Providers.DatabaseServiceProvider import Base  # Base declarative
+from config import settings
+from app.Models.User import User  # noqa: F401
+from app.Models.Music import Music  # noqa: F401
+from app.Models.PublicationQueue import PublicationQueue  # noqa: F401
+from app.Models.VideoEdit import VideoEdit  # noqa: F401
+from app.Models.Template import Template  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

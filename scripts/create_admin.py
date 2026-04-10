@@ -10,10 +10,10 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
-from app.infrastructure.database.base import SessionLocal, engine
-from app.infrastructure.database.models import UserModel
+from app.Providers.DatabaseServiceProvider import SessionLocal, engine  # engine mantido para compatibilidade
+from app.Models.User import User as UserModel
 from app.domain.entities.user import UserRole
-from app.application.auth.password import get_password_hash
+from app.Helpers.PasswordHelper import get_password_hash
 from getpass import getpass
 
 

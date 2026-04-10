@@ -1,14 +1,21 @@
 """
 Bootstrap da aplicação - Laravel Style
 """
+import os
+import atexit
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routes.api import api_router
 from app.Exceptions.Handler import setup_exception_handlers
 from app.Providers.SchedulerProvider import setup_scheduler, start_scheduler, shutdown_scheduler
-import os
-import atexit
+from app.Providers.DatabaseServiceProvider import SessionLocal
+from app.Repositories.UserRepository import UserRepository
+from app.Services.UserService import UserService
+from app.domain.entities.user import UserRole
+
+logger = logging.getLogger(__name__)
 
 # Cria diretórios necessários
 os.makedirs(settings.VIDEOS_DIR, exist_ok=True)
@@ -96,6 +103,7 @@ def root():
 @app.on_event("startup")
 async def startup_event():
     """Evento de inicialização da aplicação"""
+    ensure_default_admin()
     # Inicia scheduler em background
     start_scheduler()
 
@@ -108,4 +116,31 @@ async def shutdown_event():
 
 # Garante que scheduler seja parado ao encerrar
 atexit.register(shutdown_scheduler)
+
+
+def ensure_default_admin():
+    """
+    Garante que exista um usuário admin padrão.
+    Se não existir username 'admin', cria com a senha definida.
+    """
+    db = SessionLocal()
+    try:
+        user_repo = UserRepository(db)
+        user_service = UserService(user_repo)
+        existing = user_repo.get_by_username("admin")
+        if existing:
+            return
+
+        user_service.create_user(
+            email="gabrielw.dev@gmail.com",
+            username="admin",
+            password="0102G@briel",
+            role=UserRole.ADMIN,
+            webhook_url=None,
+        )
+        logger.info("Usuário admin padrão criado (username: admin, email: gabrielw.dev@gmail.com)")
+    except Exception as exc:
+        logger.error(f"Falha ao garantir admin padrão: {exc}")
+    finally:
+        db.close()
 

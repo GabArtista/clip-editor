@@ -1,0 +1,24 @@
+# Gabartista Universal Architecture Standards
+
+universal_architecture:
+  goals:
+    - garantir modularidade, escalabilidade e legibilidade
+    - aplicar DDD (Domain Driven Design) e Clean Architecture
+    - adotar estrutura baseada em features/domínios
+  naming_conventions:
+    - camelCase para código
+    - snake_case para bancos
+    - PascalCase para classes e componentes
+  structure:
+    - camadas: domain, application, infrastructure
+    - módulos independentes por feature
+  documentation:
+    - README.md por módulo
+    - diagramas de fluxo (mermaid ou draw.io)
+    - docstrings ou phpdoc obrigatórios
+  versioning:
+    - Gitflow: main, develop, feat/xx, fix/xx
+    - commit format: type(scope): description
+  testing:
+    - testes unitários e integração
+    - mocks e seeds de dados para simulação

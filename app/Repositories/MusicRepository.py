@@ -1,8 +1,8 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from app.domain.entities.music import Music
+from app.domain.entities.music import Music as DomainMusic
 from app.domain.repositories.music_repository import IMusicRepository
-from app.Models.music_model import Music
+from app.Models.Music import Music as MusicModel
 
 
 class MusicRepository(IMusicRepository):
@@ -11,9 +11,9 @@ class MusicRepository(IMusicRepository):
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, music: Music) -> Music:
+    def create(self, music: DomainMusic) -> DomainMusic:
         """Cria uma nova música"""
-        db_music = Music(
+        db_music = MusicModel(
             user_id=music.user_id,
             name=music.name,
             filename=music.filename,
@@ -26,26 +26,26 @@ class MusicRepository(IMusicRepository):
         self.db.refresh(db_music)
         return db_music.to_domain()
     
-    def get_by_id(self, music_id: int) -> Optional[Music]:
+    def get_by_id(self, music_id: int) -> Optional[DomainMusic]:
         """Busca música por ID"""
-        db_music = self.db.query(Music).filter(Music.id == music_id).first()
+        db_music = self.db.query(MusicModel).filter(MusicModel.id == music_id).first()
         return db_music.to_domain() if db_music else None
     
-    def get_by_user_id(self, user_id: int, skip: int = 0, limit: int = 100) -> List[Music]:
+    def get_by_user_id(self, user_id: int, skip: int = 0, limit: int = 100) -> List[DomainMusic]:
         """Lista músicas de um usuário"""
-        db_musics = self.db.query(Music).filter(
-            Music.user_id == user_id
+        db_musics = self.db.query(MusicModel).filter(
+            MusicModel.user_id == user_id
         ).offset(skip).limit(limit).all()
         return [music.to_domain() for music in db_musics]
     
-    def get_all(self, skip: int = 0, limit: int = 100) -> List[Music]:
+    def get_all(self, skip: int = 0, limit: int = 100) -> List[DomainMusic]:
         """Lista todas as músicas"""
-        db_musics = self.db.query(Music).offset(skip).limit(limit).all()
+        db_musics = self.db.query(MusicModel).offset(skip).limit(limit).all()
         return [music.to_domain() for music in db_musics]
     
-    def update(self, music: Music) -> Music:
+    def update(self, music: DomainMusic) -> DomainMusic:
         """Atualiza uma música"""
-        db_music = self.db.query(Music).filter(Music.id == music.id).first()
+        db_music = self.db.query(MusicModel).filter(MusicModel.id == music.id).first()
         if not db_music:
             raise ValueError(f"Música com ID {music.id} não encontrada")
         
@@ -61,7 +61,7 @@ class MusicRepository(IMusicRepository):
     
     def delete(self, music_id: int) -> bool:
         """Deleta uma música"""
-        db_music = self.db.query(Music).filter(Music.id == music_id).first()
+        db_music = self.db.query(MusicModel).filter(MusicModel.id == music_id).first()
         if not db_music:
             return False
         
@@ -69,11 +69,11 @@ class MusicRepository(IMusicRepository):
         self.db.commit()
         return True
     
-    def get_by_name_and_user(self, name: str, user_id: int) -> Optional[Music]:
+    def get_by_name_and_user(self, name: str, user_id: int) -> Optional[DomainMusic]:
         """Busca música por nome e usuário"""
-        db_music = self.db.query(Music).filter(
-            Music.name == name,
-            Music.user_id == user_id
+        db_music = self.db.query(MusicModel).filter(
+            MusicModel.name == name,
+            MusicModel.user_id == user_id
         ).first()
         return db_music.to_domain() if db_music else None
 

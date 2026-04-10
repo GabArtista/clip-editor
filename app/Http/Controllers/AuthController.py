@@ -10,7 +10,7 @@ from app.Http.Requests.Auth.LoginRequest import LoginRequest as UserLoginDTO
 from app.Http.Resources.UserResource import TokenResponseResource as TokenResponseDTO, UserResource as UserResponseDTO
 from config import settings
 
-router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post(
@@ -49,7 +49,7 @@ def login(credentials: UserLoginDTO, db: Session = Depends(get_db)):
         
         access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user.id},
+            data={"sub": str(user.id)},  # JWT subject deve ser string
             expires_delta=access_token_expires
         )
         

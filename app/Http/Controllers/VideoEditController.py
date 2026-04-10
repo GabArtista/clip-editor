@@ -2,16 +2,18 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.Providers.DatabaseServiceProvider import get_db
-from app.Repositories.VideoEditRepository import VideoEditRepository, PublicationQueueRepository, UserRepository
+from app.Repositories.VideoEditRepository import VideoEditRepository
+from app.Repositories.PublicationQueueRepository import PublicationQueueRepository
 from app.domain.entities.user import User
 from app.Http.Middleware.AuthMiddleware import get_current_user
 from app.Services.VideoEditService import VideoEditService
 from app.Services.PublicationService import PublicationService
 from app.Services.PublicationSchedulerService import PublicationSchedulerService
 from app.infrastructure.storage import S3Client
-from app.Http.Requests.Video.ApproveVideoRequest import ApproveVideoRequest as ApproveVideoEditDTO, VideoEditResponseDTO
+from app.Http.Requests.Video.ApproveVideoRequest import ApproveVideoRequest as ApproveVideoEditDTO
+from app.Http.Resources.VideoResource import VideoEditResource as VideoEditResponseDTO
 
-router = APIRouter(prefix="/api/v1/video-edits", tags=["Video Edits"])
+router = APIRouter(prefix="/video-edits", tags=["Video Edits"])
 
 
 @router.get("", response_model=List[VideoEditResponseDTO])

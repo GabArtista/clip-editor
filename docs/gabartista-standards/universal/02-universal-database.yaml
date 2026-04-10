@@ -1,0 +1,19 @@
+# Gabartista Universal Database Standards
+
+universal_database:
+  fields:
+    - id: UUID (PK)
+    - created_at: timestamptz DEFAULT NOW()
+    - updated_at: timestamptz DEFAULT NOW()
+    - deleted_at: timestamptz NULL
+  conventions:
+    - tabelas nomeadas em snake_case e no singular
+    - relacionamentos com foreign keys explícitas
+    - migrations versionadas e reversíveis
+  security:
+    - criptografia de dados sensíveis
+    - controle de acesso via roles/policies
+  ai_compatibility:
+    - JSONB ou vetores para embeddings
+    - versionamento de dados históricos
+    - compatibilidade com vector stores

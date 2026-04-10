@@ -2,9 +2,9 @@ from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from app.domain.entities.video_edit import VideoEdit, VideoEditStatus
+from app.domain.entities.video_edit import VideoEdit as DomainVideoEdit, VideoEditStatus
 from app.domain.repositories.video_edit_repository import IVideoEditRepository
-from app.Models.video_edit_model import VideoEdit
+from app.Models.VideoEdit import VideoEdit
 
 
 class VideoEditRepository(IVideoEditRepository):
@@ -13,7 +13,7 @@ class VideoEditRepository(IVideoEditRepository):
     def __init__(self, db: Session):
         self.db = db
     
-    def create(self, video_edit: VideoEdit) -> VideoEdit:
+    def create(self, video_edit: DomainVideoEdit) -> DomainVideoEdit:
         """Cria um novo vídeo editado"""
         db_video = VideoEdit(
             user_id=video_edit.user_id,
@@ -33,21 +33,21 @@ class VideoEditRepository(IVideoEditRepository):
         self.db.refresh(db_video)
         return db_video.to_domain()
     
-    def get_by_id(self, video_edit_id: int) -> Optional[VideoEdit]:
+    def get_by_id(self, video_edit_id: int) -> Optional[DomainVideoEdit]:
         """Busca vídeo editado por ID"""
         db_video = self.db.query(VideoEdit).filter(
             VideoEdit.id == video_edit_id
         ).first()
         return db_video.to_domain() if db_video else None
     
-    def get_by_user_id(self, user_id: int, skip: int = 0, limit: int = 100) -> List[VideoEdit]:
+    def get_by_user_id(self, user_id: int, skip: int = 0, limit: int = 100) -> List[DomainVideoEdit]:
         """Lista vídeos editados de um usuário"""
         db_videos = self.db.query(VideoEdit).filter(
             VideoEdit.user_id == user_id
         ).offset(skip).limit(limit).order_by(VideoEdit.created_at.desc()).all()
         return [v.to_domain() for v in db_videos]
     
-    def get_pending_approval(self, user_id: int) -> List[VideoEdit]:
+    def get_pending_approval(self, user_id: int) -> List[DomainVideoEdit]:
         """Lista vídeos pendentes de aprovação do usuário"""
         db_videos = self.db.query(VideoEdit).filter(
             and_(
@@ -57,7 +57,14 @@ class VideoEditRepository(IVideoEditRepository):
         ).order_by(VideoEdit.created_at.desc()).all()
         return [v.to_domain() for v in db_videos]
     
-    def get_expired_previews(self, current_time: datetime) -> List[VideoEdit]:
+    def get_by_status(self, status: VideoEditStatus) -> List[DomainVideoEdit]:
+        """Busca vídeos por status"""
+        db_videos = self.db.query(VideoEdit).filter(
+            VideoEdit.status == status
+        ).all()
+        return [v.to_domain() for v in db_videos]
+    
+    def get_expired_previews(self, current_time: datetime) -> List[DomainVideoEdit]:
         """Lista vídeos com preview expirado"""
         db_videos = self.db.query(VideoEdit).filter(
             and_(
@@ -67,7 +74,7 @@ class VideoEditRepository(IVideoEditRepository):
         ).all()
         return [v.to_domain() for v in db_videos]
     
-    def get_to_delete(self, current_time: datetime) -> List[VideoEdit]:
+    def get_to_delete(self, current_time: datetime) -> List[DomainVideoEdit]:
         """Lista vídeos que devem ser deletados"""
         db_videos = self.db.query(VideoEdit).filter(
             and_(
@@ -77,7 +84,7 @@ class VideoEditRepository(IVideoEditRepository):
         ).all()
         return [v.to_domain() for v in db_videos]
     
-    def update(self, video_edit: VideoEdit) -> VideoEdit:
+    def update(self, video_edit: DomainVideoEdit) -> DomainVideoEdit:
         """Atualiza um vídeo editado"""
         db_video = self.db.query(VideoEdit).filter(
             VideoEdit.id == video_edit.id

@@ -1,0 +1,24 @@
+# PostgreSQL Standards (Gabartista)
+
+postgres_standards:
+  version: ">=15"
+  extensions:
+    - pgvector
+    - postgis
+    - citext
+    - uuid-ossp
+  schema_design:
+    - schema público apenas para entidades globais
+    - schemas separados por domínio
+  defaults:
+    - id: UUID DEFAULT gen_random_uuid()
+    - created_at: timestamptz DEFAULT now()
+    - updated_at: timestamptz DEFAULT now()
+    - deleted_at: timestamptz NULL
+  ai_ready:
+    - embeddings: VECTOR(1536)
+    - logs: JSONB
+    - histórico: triggers com versionamento temporal
+  example_tables:
+    - users
+    - ai_embeddings
