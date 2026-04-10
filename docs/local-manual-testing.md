@@ -1,96 +1,76 @@
-# Guia de execução local e testes manuais
+# Guia atualizado de execução local
 
-Este tutorial descreve como subir a stack do editor de vídeo localmente, popular os serviços auxiliares e validar os fluxos principais da API sem depender do antigo app mobile.
+Este tutorial cobre o fluxo atual do backend simplificado (auth, carteira, músicas e IA determinística). Use-o quando quiser rodar a API na sua máquina e testar as chamadas com o Postman ou `curl`.
 
-## Pré-requisitos
+## 1. Pré-requisitos
 
-- Python 3.11+ com `venv`.
-- Docker e Docker Compose.
-- `make` opcional para atalhos (todos os comandos abaixo usam apenas `bash`).
-- 1 arquivo `.env` configurado (baseado em `env.example` ou `.env.dev`).
+- Python 3.12 com `venv`.
+- Docker + Docker Compose (para Postgres/MinIO opcionais).
+- Arquivo `.env` baseado em `.env.dev` com as variáveis de banco e diretórios ajustadas.
 
-## Passo a passo para subir o ambiente
+## 2. Preparação do ambiente
 
-1. **Copie o arquivo de variáveis:**
-   ```bash
-   cp env.example .env
-   ```
-   Ajuste portas ou diretórios caso precise. Para execução rápida em modo síncrono, defina `JOB_EXECUTION_MODE=sync` e `FAKE_REDIS=1`.
-
-2. **Crie o virtualenv e instale dependências:**
+1. **Criar virtualenv e instalar dependências**
    ```bash
    python -m venv .venv
    source .venv/bin/activate
-   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-3. **Suba os serviços Docker (API, Postgres e MinIO):**
+2. **Subir o Postgres** (opcionalmente também o MinIO):
    ```bash
-   docker compose -f docker-compose.dev.yml up --build
+   docker compose -f docker-compose.dev.yml up -d postgres
    ```
-   A API ficará acessível em `http://localhost:8060`. O painel do MinIO pode ser acessado em `http://localhost:9001` (user: `minioadmin`, senha: `minioadmin`).
+   Por padrão o serviço fica disponível em `127.0.0.1:55432`.
 
-4. **Aplicar migrações (em outro terminal com o virtualenv ativo):**
+3. **Rodar migrações**
    ```bash
    alembic upgrade head
    ```
 
-5. **Executar o worker RQ (opcional quando `JOB_EXECUTION_MODE=async`):**
+4. **Iniciar a API**
    ```bash
-   rq worker video-edit
+   uvicorn api.app:app --reload --port 8060
    ```
-   No modo síncrono (`JOB_EXECUTION_MODE=sync`) o worker externo não é necessário; os jobs são processados inline.
+   A API responde em `http://localhost:8060`.
 
-6. **Validar saúde do serviço:**
-   ```bash
-   curl http://localhost:8060/health
-   ```
-7. **Registrar usuário e obter token:**
-   ```bash
-   curl -X POST http://localhost:8060/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email": "artist@example.com", "password": "Secret123!"}'
-   ```
-   Anote o `access_token` retornado (ou faça login em `/auth/login`). Use esse token Bearer nas requisições subsequentes.
+## 3. Postman / Coleção
 
-## Roteiro de testes manuais
+Importe somente `postmans/fala-viral-api.postman_collection.json`. Ela já contém todos os fluxos:
 
-1. **Autenticação & Sessões**
-   - Importe `postmans/00-auth-sessions.postman_collection.json`.
-   - Ajuste `base_url`, cadastre/login com `email`/`password` e copie o `access_token` para o ambiente do Postman.
-   - Execute `Atualizar Sessão` informando o JSON de cookies exportado (para jobs que dependem do Instagram).
+- Auth (`/auth/register`, `/auth/login`, `/me`);
+- Wallet (`/wallet/deposit`, `/wallet/transactions`);
+- Music (`/music`, `/music/{id}`, `/music/{id}/transcribe`);
+- Video IA (`/videos/suggestions`, `/videos/variations`).
 
-2. **Biblioteca de músicas**
-   - Importe `postmans/01-music-library.postman_collection.json`.
-   - Faça upload de um MP3/M4A real para gerar um novo `music_id`.
-   - Valide o retorno da transcrição fake e dos metadados com `GET /music/{music_id}`.
+Configure o ambiente do Postman com:
 
-3. **Ingestão de vídeos**
-   - Importe `postmans/02-video-ingestion.postman_collection.json`.
-   - Use o `music_id` gerado anteriormente (ou deixe em branco para sugestões genéricas).
-   - Capture o `video_id` retornado para as etapas seguintes.
+| Variável | Exemplo |
+| --- | --- |
+| `baseUrl` | `http://localhost:8060` |
+| `accessToken` | preencha após registrar/login |
+| `musicId` | atualizado após o upload |
 
-4. **Jobs de renderização**
-   - Utilize `postmans/03-video-jobs.postman_collection.json`.
-   - Em `/render/{video_id}` informe os `clip_ids` retornados ao consultar `/videos/{video_id}`.
-   - Acompanhe o job pelo `GET /jobs/{job_id}`.
+## 4. Roteiro rápido de testes manuais
 
-5. **Feedbacks e centros de aprendizado**
-   - Importe `postmans/04-feedback-learning.postman_collection.json`.
-   - Reutilize um `music_id` válido (quando necessário).
-   - Crie um centro de aprendizado, atualize e depois arquive para percorrer todo o ciclo.
+1. **Auth:** `POST /auth/register` → copiar `access_token`. Se necessário, `POST /auth/login`.
+2. **Wallet:** `POST /wallet/deposit` com valores em reais (créditos). Verificar em `GET /wallet/transactions`.
+3. **Música:** `POST /music` (multipart) e guardar o `id`. Conferir com `GET /music`.
+4. **Transcrição:** `POST /music/{id}/transcribe` → verifica se os créditos foram debitados e se a transcrição foi salva.
+5. **Sugestões de vídeo:** `POST /videos/suggestions` passando `video_url`, duração e a lista `music_ids`.
+6. **Variações:** `POST /videos/variations` com o `music_id` escolhido na etapa anterior.
 
-6. **Observabilidade**
-   - Em `postmans/05-observability.postman_collection.json` execute `GET /metrics` e confirme a exposição no formato Prometheus.
+## 5. Debug / Logs
 
-## Encerrando o ambiente
+- **API local:** os logs aparecem no terminal do `uvicorn`.
+- **API via Docker Compose:** `docker compose -f docker-compose.dev.yml logs -f api`.
+- **Postgres:** `docker compose -f docker-compose.dev.yml logs -f postgres`.
 
-- Pare os containers:
-  ```bash
-  docker compose -f docker-compose.dev.yml down
-  ```
-- Opcional: limpe volumes com `docker volume rm fala_db_data fala_object_storage fala_media_cache`.
-- Desative o virtualenv com `deactivate`.
+## 6. Encerramento
 
-> Dica: mantenha os `postmans/*.json` importados no Postman e salve um ambiente local com `base_url`, `user_id`, `music_id`, etc. Assim você reaproveita os mesmos fluxos ao validar correções futuras.
+```bash
+docker compose -f docker-compose.dev.yml down
+deactivate  # sai do virtualenv
+```
+
+Se quiser limpar tudo, use `docker compose -f docker-compose.dev.yml down -v` para remover volumes e começar do zero.

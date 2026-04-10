@@ -16,15 +16,11 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-user_status_enum = sa.Enum("active", "suspended", "deleted", name="user_status")
-wallet_transaction_type_enum = sa.Enum("deposit", "usage", name="wallet_transaction_type")
+user_status_enum = sa.Enum("active", "suspended", "deleted", name="user_status", create_type=False)
+wallet_transaction_type_enum = sa.Enum("deposit", "usage", name="wallet_transaction_type", create_type=False)
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    user_status_enum.create(bind, checkfirst=True)
-    wallet_transaction_type_enum.create(bind, checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),

@@ -1,4 +1,6 @@
-# Plano da Feature `feature/corte-automatizado-main`
+# Plano da Feature `feature/corte-automatizado-main` *(arquivo histórico)*
+
+> **Aviso:** este documento descreve a arquitetura antiga baseada em filas, feedbacks e centros de aprendizado. A partir da branch `feature/ia-wallet-backend` esses módulos foram descontinuados em favor do fluxo simplificado (auth + carteira + músicas + IA determinística). O texto abaixo foi mantido apenas como registro histórico.
 
 Este documento fornece contexto completo para continuação do desenvolvimento por qualquer pessoa/IA. Ele descreve ambiente, banco dedicado, organização das sprints, branches e testes esperados.
 

@@ -60,3 +60,18 @@ pytest
 ```
 
 Os testes usam SQLite e um modo determinístico de IA (sem chamar a OpenAI). Para testar contra a API real, basta definir `OPENAI_API_KEY` e remover os limites na infraestrutura.
+
+## Passo a passo para testar manualmente
+
+1. **Suba o servidor**: `uvicorn api.app:app --reload --port 8060` (ou outro host/porta).  
+2. **Cadastre um usuário** (POST `/auth/register`) e copie o `access_token` retornado.  
+3. **Faça login** (POST `/auth/login`) para validar as credenciais e renovar o token.  
+4. **Deposite créditos** (POST `/wallet/deposit`) — sem saldo as rotas de IA retornam 402.  
+5. **Envie uma música** (POST `/music` multipart) e anote o `id` devolvido.  
+6. **Transcreva a música** (POST `/music/{id}/transcribe`) para liberar o uso nas sugestões.  
+7. **Consulte a biblioteca** (GET `/music` e `/music/{id}`) para garantir que a transcrição foi salva.  
+8. **Peça sugestões de vídeo** (POST `/videos/suggestions`) passando `video_url`, duração e a lista de músicas.  
+9. **Gere variações** (POST `/videos/variations`) informando a música escolhida.  
+10. **Acompanhe os débitos** em `GET /wallet/transactions` para confirmar que cada chamada de IA cobrou corretamente.
+
+Todos esses passos já estão configurados na nova coleção Postman (`postmans/fala-viral-api.postman_collection.json`).

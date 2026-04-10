@@ -1,0 +1,365 @@
+{
+  "info": {
+    "_postman_id": "a2a081ce-d9ca-4cc5-a16a-7266f8f16443",
+    "name": "FALA Viral API",
+    "description": "Coleção atualizada para o backend simplificado (auth, carteira, músicas, IA de sugestões). Defina a variável `baseUrl` (ex.: http://localhost:8060).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"artist@example.com\",\n  \"password\": \"StrongerPassword123\",\n  \"display_name\": \"FALA Artist\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"artist@example.com\",\n  \"password\": \"StrongerPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Wallet",
+      "item": [
+        {
+          "name": "Deposit Credits",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50.0,\n  \"description\": \"Depósito manual\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallet/deposit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallet",
+                "deposit"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wallet/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "wallet",
+                "transactions"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Music Library",
+      "item": [
+        {
+          "name": "Upload Music",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "Minha faixa viral",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Single de teste",
+                  "type": "text"
+                },
+                {
+                  "key": "duration_seconds",
+                  "value": "120",
+                  "type": "text"
+                },
+                {
+                  "key": "bpm",
+                  "value": "120",
+                  "type": "text"
+                },
+                {
+                  "key": "audio_file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/music",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "music"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Music",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/music",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "music"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Music Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/music/{{musicId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "music",
+                "{{musicId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Transcribe Music",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": \"pt\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/music/{{musicId}}/transcribe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "music",
+                "{{musicId}}",
+                "transcribe"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Video Intelligence",
+      "item": [
+        {
+          "name": "Generate Suggestions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"video_url\": \"https://example.com/video.mp4\",\n  \"video_duration_seconds\": 90,\n  \"notes\": \"Quero viralizar no TikTok\",\n  \"music_ids\": [\"{{musicId}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/videos/suggestions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "videos",
+                "suggestions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Variations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"video_url\": \"https://example.com/video.mp4\",\n  \"video_duration_seconds\": 90,\n  \"notes\": \"Versão final\",\n  \"music_id\": \"{{musicId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/videos/variations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "videos",
+                "variations"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8060"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "musicId",
+      "value": ""
+    }
+  ]
+}
